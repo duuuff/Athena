@@ -1,5 +1,7 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+> Modifié par Claude Code — test de synchronisation git.
+
 ## Getting Started
 
 First, run the development server:
