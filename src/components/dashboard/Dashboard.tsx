@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Document } from '@/lib/types';
 import { getDocuments, saveDocument, deleteDocument } from '@/lib/storage';
-import { DEFAULT_CONTENT, DEMO_THESIS_CONTENT, DEMO_REPORT_CONTENT } from '@/lib/defaultContent';
+import { DEFAULT_CONTENT, DEMO_THESIS_CONTENT, DEMO_REPORT_CONTENT, DEMO_ARTICLE_CONTENT, DEMO_CV_CONTENT } from '@/lib/defaultContent';
 
 const TEMPLATES = [
   {
@@ -34,14 +34,14 @@ const TEMPLATES = [
     icon: '📰',
     label: 'Article scientifique',
     description: 'Format IEEE / ACM',
-    content: DEFAULT_CONTENT,
+    content: DEMO_ARTICLE_CONTENT,
   },
   {
     id: 'cv',
     icon: '👤',
     label: 'CV académique',
     description: 'Curriculum vitae structuré',
-    content: DEFAULT_CONTENT,
+    content: DEMO_CV_CONTENT,
   },
 ];
 
@@ -87,6 +87,7 @@ export default function Dashboard() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>('newest');
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
   useEffect(() => {
     setDocuments(getDocuments());
@@ -271,48 +272,75 @@ export default function Dashboard() {
               Documents récents {documents.length > 0 && <span>({filtered.length})</span>}
             </h2>
 
-            {/* Sort dropdown */}
-            {documents.length > 1 && (
-              <div style={{ position: 'relative' }}>
-                <button
-                  onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v); }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '6px',
-                    background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px',
-                    padding: '5px 10px', color: 'var(--text2)', fontSize: '11px', fontWeight: 600,
-                    cursor: 'pointer', fontFamily: "'Syne', sans-serif",,
-                  }}
-                >
-                  ↕ {SORT_LABELS[sortKey]}
-                </button>
-                {showSortMenu && (
-                  <div style={{
-                    position: 'absolute', right: 0, top: 'calc(100% + 4px)',
-                    background: 'var(--surface)', border: '1px solid var(--border)',
-                    borderRadius: '8px', overflow: 'hidden', zIndex: 50,
-                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)', minWidth: '140px',
-                  }}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
-                      <button
-                        key={key}
-                        onClick={() => { setSortKey(key); setShowSortMenu(false); }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left',
-                          padding: '9px 14px', background: sortKey === key ? 'var(--surface2)' : 'transparent',
-                          border: 'none', color: sortKey === key ? 'var(--accent2)' : 'var(--text2)',
-                          fontSize: '12px', fontWeight: sortKey === key ? 700 : 400,
-                          cursor: 'pointer', fontFamily: "'Syne', sans-serif",
-                        }}
-                        onMouseEnter={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface2)'; }}
-                        onMouseLeave={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+            {/* Sort + view controls */}
+            {documents.length > 0 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {/* Sort dropdown */}
+                {documents.length > 1 && (
+                  <div style={{ position: 'relative' }}>
+                    <button
+                      onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: '6px',
+                        background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px',
+                        padding: '5px 10px', color: 'var(--text2)', fontSize: '11px', fontWeight: 600,
+                        cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                      }}
+                    >
+                      ↕ {SORT_LABELS[sortKey]}
+                    </button>
+                    {showSortMenu && (
+                      <div style={{
+                        position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                        background: 'var(--surface)', border: '1px solid var(--border)',
+                        borderRadius: '8px', overflow: 'hidden', zIndex: 50,
+                        boxShadow: '0 8px 32px rgba(0,0,0,0.4)', minWidth: '140px',
+                      }}
+                        onClick={e => e.stopPropagation()}
                       >
-                        {SORT_LABELS[key]}
-                      </button>
-                    ))}
+                        {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                          <button
+                            key={key}
+                            onClick={() => { setSortKey(key); setShowSortMenu(false); }}
+                            style={{
+                              display: 'block', width: '100%', textAlign: 'left',
+                              padding: '9px 14px', background: sortKey === key ? 'var(--surface2)' : 'transparent',
+                              border: 'none', color: sortKey === key ? 'var(--accent2)' : 'var(--text2)',
+                              fontSize: '12px', fontWeight: sortKey === key ? 700 : 400,
+                              cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                            }}
+                            onMouseEnter={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface2)'; }}
+                            onMouseLeave={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                          >
+                            {SORT_LABELS[key]}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
+
+                {/* View mode toggle */}
+                <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
+                  {(['grid', 'list'] as const).map(mode => (
+                    <button
+                      key={mode}
+                      onClick={() => setViewMode(mode)}
+                      title={mode === 'grid' ? 'Vue grille' : 'Vue liste'}
+                      style={{
+                        width: '28px', height: '26px',
+                        background: viewMode === mode ? 'var(--surface3)' : 'transparent',
+                        border: 'none',
+                        color: viewMode === mode ? 'var(--accent)' : 'var(--text3)',
+                        cursor: 'pointer', fontSize: '13px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        transition: 'all 0.1s',
+                      }}
+                    >
+                      {mode === 'grid' ? '⊞' : '≡'}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
@@ -334,7 +362,7 @@ export default function Dashboard() {
                 {search ? `Aucun document ne correspond à "${search}"` : 'Créez votre premier document ci-dessus'}
               </div>
             </div>
-          ) : (
+          ) : viewMode === 'grid' ? (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '12px' }}>
               {filtered.map(doc => (
                 <div
@@ -424,6 +452,48 @@ export default function Dashboard() {
                       onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(235,87,87,0.3)'; }}
                       onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; }}
                     >✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* List view */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              {filtered.map(doc => (
+                <div
+                  key={doc.id}
+                  style={{
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: '8px',
+                    padding: '11px 14px',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    position: 'relative',
+                  }}
+                  onClick={() => router.push(`/editor/${doc.id}`)}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--text3)';
+                    (e.currentTarget as HTMLDivElement).style.background = 'var(--surface2)';
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)';
+                    (e.currentTarget as HTMLDivElement).style.background = 'var(--surface)';
+                  }}
+                >
+                  <div style={{ width: '32px', height: '40px', background: 'var(--doc-bg)', border: '1px solid var(--doc-border)', borderRadius: '3px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px' }}>📄</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.title}</div>
+                    <div style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", marginTop: '2px' }}>
+                      {formatDate(doc.updatedAt)}{doc.wordCount > 0 && ` · ${doc.wordCount} mots`}
+                    </div>
+                  </div>
+                  <div className="doc-actions" style={{ display: 'flex', gap: '4px', opacity: 0, transition: 'opacity 0.1s', flexShrink: 0 }}>
+                    <button onClick={e => handleDuplicate(doc, e)} title="Dupliquer" style={{ width: '24px', height: '24px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text3)', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent2)'; }} onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; }}>⧉</button>
+                    <button onClick={e => { e.stopPropagation(); setDeleteId(doc.id); }} title="Supprimer" style={{ width: '24px', height: '24px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '4px', color: 'var(--text3)', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center' }} onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'; }} onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; }}>✕</button>
                   </div>
                 </div>
               ))}

@@ -188,11 +188,31 @@ src/
 
 ---
 
+### 5. Templates complets Article et CV
+- **Article scientifique** : vrai article IEEE avec abstract, sections, formules, tableau comparatif, références
+- **CV académique** : CV structuré complet (formation, publications, expériences, compétences, langues, distinctions)
+
+### 6. Export Markdown
+- Nouveau bouton `↓ MD` dans la TopBar éditeur
+- Convertisseur HTML → Markdown (`src/lib/htmlToMarkdown.ts`) : titres, gras/italique, code, tableaux, listes, blockquotes, liens, images
+- Téléchargement du fichier `.md` directement dans le navigateur
+
+### 7. Labels personnalisés pour les versions
+- Input inline dans la TopBar éditeur (`Nom de version…`)
+- Appui sur Entrée ou clic 💾 → sauvegarde avec le label saisi
+- Si l'input est vide : label automatique horodaté (comportement précédent)
+
+### 8. Vue liste sur le Dashboard
+- Toggle ⊞ / ≡ à droite du sélecteur de tri
+- Vue liste : icône document miniature + titre + date + compteur de mots + actions (dupliquer, supprimer)
+
+---
+
 ## Roadmap (non implémenté)
 
-- **Phase 2** : Export .docx, export Markdown, export LaTeX compilable
 - **Phase 3** : Intégration API Anthropic (panel IA fonctionnel : reformulation, génération, correction)
 - **Phase 4** : Backend (base de données, authentification, collaboration temps-réel)
-- **Templates** : contenu HTML complet pour Article scientifique et CV académique
+- **Export** : .docx, LaTeX compilable
 - **Bibliographie** : ajout/suppression/insertion de citations dans le document
 - **Mode nuit/jour** pour le canvas (fond blanc vs fond sombre)
+- **Tags / dossiers** sur le dashboard

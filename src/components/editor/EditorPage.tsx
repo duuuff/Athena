@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getDocument, saveDocument, saveVersion, getVersions, countWords, computeStats } from '@/lib/storage';
 import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId, DocStats } from '@/lib/types';
+import { htmlToMarkdown } from '@/lib/htmlToMarkdown';
 import EditorToolbar from './EditorToolbar';
 import EditorCanvas from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
@@ -32,6 +33,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [liveWordCount, setLiveWordCount] = useState(0);
   const [focusMode, setFocusMode] = useState(false);
+  const [versionLabel, setVersionLabel] = useState('');
   const [showStats, setShowStats] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -97,10 +99,25 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   }, [content, triggerSave]);
 
   const handleSaveVersion = useCallback(() => {
-    const label = `Version — ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+    const label = versionLabel.trim()
+      || `Version — ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
     saveVersion({ id: uuidv4(), documentId, content, savedAt: new Date().toISOString(), label });
     setVersions(getVersions(documentId));
-  }, [documentId, content]);
+    setVersionLabel('');
+  }, [documentId, content, versionLabel]);
+
+  const handleExportMarkdown = useCallback(() => {
+    const html = editorRef.current?.getHTML() ?? content;
+    const md = htmlToMarkdown(html);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'document'}.md`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  }, [content, title]);
 
   const handleRestoreVersion = useCallback((versionContent: string) => {
     setContent(versionContent);
@@ -207,6 +224,9 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         }}
         onSaveVersion={handleSaveVersion}
         onShowVersions={() => { setVersions(getVersions(documentId)); setShowVersions(true); }}
+        onExportMarkdown={handleExportMarkdown}
+        versionLabel={versionLabel}
+        onVersionLabelChange={setVersionLabel}
         wordCount={liveWordCount}
       />
 
@@ -286,18 +306,21 @@ interface TopBarProps {
   saveStatus: SaveStatus;
   mode: EditorMode;
   focusMode: boolean;
+  versionLabel: string;
+  onVersionLabelChange: (v: string) => void;
   onTitleChange: (t: string) => void;
   onModeChange: (m: EditorMode) => void;
   onBack: () => void;
   onSaveVersion: () => void;
   onShowVersions: () => void;
   onExportPDF: () => void;
+  onExportMarkdown: () => void;
   onToggleFocus: () => void;
   onShowStats: () => void;
   wordCount: number;
 }
 
-function TopBar({ title, saveStatus, mode, focusMode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onToggleFocus, onShowStats, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, focusMode, versionLabel, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, onToggleFocus, onShowStats, wordCount }: TopBarProps) {
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
@@ -349,9 +372,17 @@ function TopBar({ title, saveStatus, mode, focusMode, onTitleChange, onModeChang
         <div style={{ width: '1px', height: '24px', background: 'var(--border)' }} />
         <button onClick={onShowStats} title="Statistiques du document" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>≡ Stats</button>
         <button onClick={onToggleFocus} title="Mode focus (distraction-free)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>⛶ Focus</button>
-        <button onClick={onSaveVersion} title="Sauvegarder une version" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>💾 Version</button>
+        <input
+          value={versionLabel}
+          onChange={e => onVersionLabelChange(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') onSaveVersion(); }}
+          placeholder="Nom de version…"
+          style={{ width: '130px', fontFamily: "'Syne', sans-serif", fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', outline: 'none' }}
+        />
+        <button onClick={onSaveVersion} title="Sauvegarder une version (Enter)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>💾</button>
         <button onClick={onShowVersions} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>Historique</button>
-        <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>Exporter PDF</button>
+        <button onClick={onExportMarkdown} title="Télécharger en Markdown" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>↓ MD</button>
+        <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>↓ PDF</button>
         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent2), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'white', cursor: 'pointer', flexShrink: 0 }}>ML</div>
       </div>
     </div>
