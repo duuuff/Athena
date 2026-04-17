@@ -1,7 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { PanelId } from '@/lib/types';
+import { PanelId, Reference } from '@/lib/types';
+import { getReferences, saveReferences } from '@/lib/storage';
+import { v4 as uuidv4 } from 'uuid';
 
 interface SidebarPanelProps {
   panelId: PanelId;
@@ -11,6 +13,8 @@ interface SidebarPanelProps {
   accentColor?: string;
   latexContent?: string;
   content?: string;
+  documentId?: string;
+  onInsertCitation?: (text: string) => void;
   onClose?: () => void;
   inline?: boolean;
 }
@@ -23,19 +27,32 @@ export default function SidebarPanel({
   accentColor,
   latexContent,
   content,
+  documentId,
+  onInsertCitation,
   onClose,
   inline,
 }: SidebarPanelProps) {
   const isOpen = activePanel === panelId;
 
+  const panelContent = (
+    <>
+      {panelId === 'ai' && <AIPanel onClose={onClose} />}
+      {panelId === 'latex' && <LaTeXPanel content={latexContent ?? ''} onClose={onClose} />}
+      {panelId === 'toc' && <TOCPanel content={content ?? ''} onClose={onClose} />}
+      {panelId === 'refs' && (
+        <RefsPanel
+          documentId={documentId ?? ''}
+          onInsertCitation={onInsertCitation}
+          onClose={onClose}
+        />
+      )}
+    </>
+  );
+
   if (inline) {
-    // In-flow mode: fill parent container
     return (
       <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--surface)' }}>
-        {panelId === 'ai' && <AIPanel onClose={onClose} />}
-        {panelId === 'latex' && <LaTeXPanel content={latexContent ?? ''} onClose={onClose} />}
-        {panelId === 'toc' && <TOCPanel content={content ?? ''} onClose={onClose} />}
-        {panelId === 'refs' && <RefsPanel onClose={onClose} />}
+        {panelContent}
       </div>
     );
   }
@@ -57,10 +74,7 @@ export default function SidebarPanel({
       boxShadow: isOpen ? '4px 0 24px rgba(0,0,0,0.4)' : 'none',
       pointerEvents: isOpen ? 'all' : 'none',
     }}>
-      {panelId === 'ai' && <AIPanel onClose={onClose} />}
-      {panelId === 'latex' && <LaTeXPanel content={latexContent ?? ''} onClose={onClose} />}
-      {panelId === 'toc' && <TOCPanel content={content ?? ''} onClose={onClose} />}
-      {panelId === 'refs' && <RefsPanel onClose={onClose} />}
+      {panelContent}
     </div>
   );
 }
@@ -110,7 +124,6 @@ function AIPanel({ onClose }: { onClose?: () => void }) {
 function LaTeXPanel({ content, onClose }: { content: string; onClose?: () => void }) {
   const [copied, setCopied] = useState(false);
 
-  // Convert HTML to pseudo-LaTeX for display
   const latex = content
     .replace(/<h1[^>]*>(.*?)<\/h1>/gi, (_, t) => `\\title{${stripTags(t)}}\n`)
     .replace(/<h2[^>]*>(.*?)<\/h2>/gi, (_, t) => `\n\\section{${stripTags(t)}}\n`)
@@ -179,7 +192,6 @@ function stripTags(html: string) {
 
 // ===== TOC PANEL =====
 function TOCPanel({ content, onClose }: { content: string; onClose?: () => void }) {
-  // Extract headings from HTML content
   const headings: Array<{ level: number; text: string; id: number }> = [];
   let counter = 0;
   const regex = /<h([1-4])[^>]*>(.*?)<\/h[1-4]>/gi;
@@ -235,58 +247,273 @@ function TOCPanel({ content, onClose }: { content: string; onClose?: () => void 
   );
 }
 
-// ===== REFS PANEL =====
-const DEMO_REFS = [
-  { key: '[1]', authors: 'Vaswani et al., 2017', title: 'Attention Is All You Need. NeurIPS 2017.' },
-  { key: '[2]', authors: 'Brown et al., 2020', title: 'Language Models are Few-Shot Learners. NeurIPS 2020.' },
-  { key: '[3]', authors: 'Och & Ney, 2003', title: 'A Systematic Comparison of Various Statistical Alignment Models.' },
-];
+// ===== REFS PANEL (fonctionnel) =====
 
-function RefsPanel({ onClose }: { onClose?: () => void }) {
+const EMPTY_FORM = { authors: '', title: '', year: '', venue: '', url: '' };
+
+function RefsPanel({
+  documentId,
+  onInsertCitation,
+  onClose,
+}: {
+  documentId: string;
+  onInsertCitation?: (text: string) => void;
+  onClose?: () => void;
+}) {
+  const [refs, setRefs] = useState<Reference[]>(() =>
+    documentId ? getReferences(documentId) : []
+  );
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+
+  function persist(updated: Reference[]) {
+    setRefs(updated);
+    if (documentId) saveReferences(documentId, updated);
+  }
+
+  function handleAdd() {
+    if (!form.authors.trim() || !form.title.trim()) return;
+    const order = refs.length + 1;
+    const newRef: Reference = {
+      id: uuidv4(),
+      documentId,
+      authors: form.authors.trim(),
+      title: form.title.trim(),
+      year: form.year.trim(),
+      venue: form.venue.trim(),
+      url: form.url.trim() || undefined,
+      order,
+    };
+    persist([...refs, newRef]);
+    setForm(EMPTY_FORM);
+    setShowForm(false);
+  }
+
+  function handleEdit(ref: Reference) {
+    setEditingId(ref.id);
+    setForm({ authors: ref.authors, title: ref.title, year: ref.year, venue: ref.venue, url: ref.url ?? '' });
+    setShowForm(true);
+  }
+
+  function handleSaveEdit() {
+    if (!form.authors.trim() || !form.title.trim()) return;
+    const updated = refs.map(r =>
+      r.id === editingId
+        ? { ...r, authors: form.authors.trim(), title: form.title.trim(), year: form.year.trim(), venue: form.venue.trim(), url: form.url.trim() || undefined }
+        : r
+    );
+    persist(updated);
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setShowForm(false);
+  }
+
+  function handleDelete(id: string) {
+    const updated = refs
+      .filter(r => r.id !== id)
+      .map((r, i) => ({ ...r, order: i + 1 }));
+    persist(updated);
+    setConfirmDelete(null);
+  }
+
+  function handleInsert(ref: Reference) {
+    onInsertCitation?.(`[${ref.order}]`);
+  }
+
+  function cancelForm() {
+    setShowForm(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader title="Bibliographie" icon="①" accentColor="var(--accent)" onClose={onClose} />
+      <div style={{ height: '44px', display: 'flex', alignItems: 'center', padding: '0 10px 0 14px', borderBottom: '1px solid var(--border)', gap: '8px', flexShrink: 0 }}>
+        <span style={{ fontSize: '13px' }}>①</span>
+        <span style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 700, color: 'var(--accent)', flex: 1 }}>Bibliographie</span>
+        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: 'var(--text3)' }}>{refs.length} réf.</span>
+        {onClose && (
+          <button onClick={onClose} style={closeBtnStyle}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'}
+          >✕</button>
+        )}
+      </div>
+
       <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
+        {refs.length === 0 && !showForm && (
+          <div style={{ padding: '20px 0', color: 'var(--text3)', fontSize: '12px', fontFamily: "'DM Mono', monospace", textAlign: 'center' }}>
+            Aucune référence. Ajoutez-en une ci-dessous.
+          </div>
+        )}
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {DEMO_REFS.map(ref => (
+          {refs.map(ref => (
             <div
-              key={ref.key}
+              key={ref.id}
               style={{
                 background: 'var(--surface2)',
-                border: '1px solid var(--border)',
+                border: `1px solid ${confirmDelete === ref.id ? 'var(--red)' : 'var(--border)'}`,
                 borderRadius: '6px',
                 padding: '10px 12px',
                 fontSize: '11px',
                 color: 'var(--text2)',
                 lineHeight: 1.5,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
+                transition: 'border-color 0.15s',
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent2)'}
-              onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'}
             >
-              <div style={{ fontWeight: 700, color: 'var(--text)', fontSize: '11px', marginBottom: '2px' }}>{ref.authors}</div>
-              {ref.title}
-              <span style={{
-                display: 'inline-block',
-                fontFamily: "'DM Mono', monospace",
-                fontSize: '9px',
-                background: 'rgba(124,106,255,0.15)',
-                color: 'var(--accent2)',
-                borderRadius: '3px',
-                padding: '1px 5px',
-                marginTop: '4px',
-              }}>{ref.key}</span>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', marginBottom: '4px' }}>
+                <span style={{
+                  fontFamily: "'DM Mono', monospace",
+                  fontSize: '10px',
+                  background: 'rgba(124,106,255,0.15)',
+                  color: 'var(--accent2)',
+                  borderRadius: '3px',
+                  padding: '1px 5px',
+                  flexShrink: 0,
+                  marginTop: '1px',
+                }}>[{ref.order}]</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: '1px' }}>{ref.authors}{ref.year ? `, ${ref.year}` : ''}</div>
+                  <div style={{ fontStyle: 'italic' }}>{ref.title}</div>
+                  {ref.venue && <div style={{ color: 'var(--text3)', fontSize: '10px', marginTop: '1px' }}>{ref.venue}</div>}
+                  {ref.url && (
+                    <div style={{ fontSize: '10px', color: 'var(--accent2)', marginTop: '2px', wordBreak: 'break-all' }}>{ref.url}</div>
+                  )}
+                </div>
+              </div>
+
+              {confirmDelete === ref.id ? (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                  <button onClick={() => handleDelete(ref.id)} style={actionBtnStyle('var(--red)')}>Supprimer</button>
+                  <button onClick={() => setConfirmDelete(null)} style={actionBtnStyle('var(--surface3)')}>Annuler</button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: '6px', marginTop: '8px' }}>
+                  {onInsertCitation && (
+                    <button onClick={() => handleInsert(ref)} style={actionBtnStyle('var(--accent2)')}>↩ Insérer [{ref.order}]</button>
+                  )}
+                  <button onClick={() => handleEdit(ref)} style={actionBtnStyle('var(--surface3)')}>✎ Éditer</button>
+                  <button onClick={() => setConfirmDelete(ref.id)} style={actionBtnStyle('var(--surface3)')}>✕</button>
+                </div>
+              )}
             </div>
           ))}
         </div>
-        <div style={{ marginTop: '12px', padding: '10px', background: 'var(--surface2)', borderRadius: '6px', border: '1px dashed var(--border)', textAlign: 'center', color: 'var(--text3)', fontSize: '11px', cursor: 'pointer' }}>
-          + Ajouter une référence
-        </div>
+
+        {showForm && (
+          <div style={{ marginTop: '10px', background: 'var(--surface2)', border: '1px solid var(--accent2)', borderRadius: '8px', padding: '12px' }}>
+            <div style={{ fontFamily: "'Syne', sans-serif", fontSize: '11px', fontWeight: 700, color: 'var(--accent)', marginBottom: '10px' }}>
+              {editingId ? 'Modifier la référence' : 'Nouvelle référence'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '7px' }}>
+              <RefInput placeholder="Auteurs *" value={form.authors} onChange={v => setForm(f => ({ ...f, authors: v }))} />
+              <RefInput placeholder="Titre *" value={form.title} onChange={v => setForm(f => ({ ...f, title: v }))} />
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <RefInput placeholder="Année" value={form.year} onChange={v => setForm(f => ({ ...f, year: v }))} style={{ flex: '0 0 70px' }} />
+                <RefInput placeholder="Journal / Conférence / Éditeur" value={form.venue} onChange={v => setForm(f => ({ ...f, venue: v }))} />
+              </div>
+              <RefInput placeholder="URL (optionnel)" value={form.url} onChange={v => setForm(f => ({ ...f, url: v }))} />
+            </div>
+            <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+              <button
+                onClick={editingId ? handleSaveEdit : handleAdd}
+                disabled={!form.authors.trim() || !form.title.trim()}
+                style={{
+                  ...actionBtnStyle('var(--accent2)'),
+                  opacity: (!form.authors.trim() || !form.title.trim()) ? 0.4 : 1,
+                  cursor: (!form.authors.trim() || !form.title.trim()) ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {editingId ? 'Enregistrer' : 'Ajouter'}
+              </button>
+              <button onClick={cancelForm} style={actionBtnStyle('var(--surface3)')}>Annuler</button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {!showForm && (
+        <div style={{ padding: '10px', borderTop: '1px solid var(--border)', flexShrink: 0 }}>
+          <button
+            onClick={() => { setShowForm(true); setEditingId(null); setForm(EMPTY_FORM); }}
+            style={{
+              width: '100%',
+              padding: '8px',
+              background: 'transparent',
+              border: '1px dashed var(--border)',
+              borderRadius: '6px',
+              color: 'var(--text3)',
+              fontSize: '11px',
+              fontFamily: "'Syne', sans-serif",
+              cursor: 'pointer',
+              transition: 'all 0.15s',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent2)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent2)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; }}
+          >
+            + Ajouter une référence
+          </button>
+        </div>
+      )}
     </div>
   );
 }
+
+function RefInput({ placeholder, value, onChange, style }: { placeholder: string; value: string; onChange: (v: string) => void; style?: React.CSSProperties }) {
+  return (
+    <input
+      type="text"
+      placeholder={placeholder}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: '4px',
+        padding: '5px 8px',
+        fontSize: '11px',
+        fontFamily: "'Syne', sans-serif",
+        color: 'var(--text)',
+        outline: 'none',
+        flex: 1,
+        ...style,
+      }}
+    />
+  );
+}
+
+function actionBtnStyle(bg: string): React.CSSProperties {
+  return {
+    padding: '3px 8px',
+    fontSize: '10px',
+    fontFamily: "'Syne', sans-serif",
+    fontWeight: 600,
+    background: bg,
+    border: 'none',
+    borderRadius: '4px',
+    color: 'var(--text)',
+    cursor: 'pointer',
+    flexShrink: 0,
+  };
+}
+
+const closeBtnStyle: React.CSSProperties = {
+  width: '24px',
+  height: '24px',
+  background: 'transparent',
+  border: 'none',
+  color: 'var(--text3)',
+  cursor: 'pointer',
+  fontSize: '14px',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  borderRadius: '4px',
+  flexShrink: 0,
+};
 
 // ===== SHARED COMPONENTS =====
 function PanelHeader({ title, icon, accentColor, monoTitle, onClose }: { title: string; icon: string; accentColor?: string; monoTitle?: boolean; onClose?: () => void }) {
@@ -295,7 +522,7 @@ function PanelHeader({ title, icon, accentColor, monoTitle, onClose }: { title: 
       <span style={{ fontSize: '13px' }}>{icon}</span>
       <span style={{ fontFamily: monoTitle ? "'DM Mono', monospace" : "'Syne', sans-serif", fontSize: '12px', fontWeight: 700, color: accentColor ?? 'var(--text)', flex: 1 }}>{title}</span>
       {onClose && (
-        <button onClick={onClose} style={{ width: '24px', height: '24px', background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0 }}
+        <button onClick={onClose} style={closeBtnStyle}
           onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'}
           onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'}
         >✕</button>

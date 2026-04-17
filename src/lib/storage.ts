@@ -1,7 +1,8 @@
-import { Document, DocumentVersion, DocStats } from './types';
+import { Document, DocumentVersion, DocStats, Reference } from './types';
 
 const DOCUMENTS_KEY = 'scripta_documents';
 const VERSIONS_KEY = 'scripta_versions';
+const REFS_PREFIX = 'scripta_refs_';
 const MAX_VERSIONS_PER_DOC = 20;
 
 export function getDocuments(): Document[] {
@@ -34,10 +35,9 @@ export function saveDocument(doc: Document): void {
 export function deleteDocument(id: string): void {
   const docs = getDocuments().filter(d => d.id !== id);
   localStorage.setItem(DOCUMENTS_KEY, JSON.stringify(docs));
-  // Also clean up versions
-  const versions = getVersions(id);
   const allVersions = getAllVersions().filter(v => v.documentId !== id);
   localStorage.setItem(VERSIONS_KEY, JSON.stringify(allVersions));
+  localStorage.removeItem(REFS_PREFIX + id);
 }
 
 export function getAllVersions(): DocumentVersion[] {
@@ -67,6 +67,23 @@ export function saveVersion(version: DocumentVersion): void {
   const pruned = all.filter(v => v.documentId !== version.documentId || toKeep.has(v.id));
 
   localStorage.setItem(VERSIONS_KEY, JSON.stringify(pruned));
+}
+
+// ===== REFERENCES =====
+
+export function getReferences(documentId: string): Reference[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(REFS_PREFIX + documentId);
+    if (!raw) return [];
+    return (JSON.parse(raw) as Reference[]).sort((a, b) => a.order - b.order);
+  } catch {
+    return [];
+  }
+}
+
+export function saveReferences(documentId: string, refs: Reference[]): void {
+  localStorage.setItem(REFS_PREFIX + documentId, JSON.stringify(refs));
 }
 
 export function countWords(html: string): number {

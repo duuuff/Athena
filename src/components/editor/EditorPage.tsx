@@ -36,6 +36,10 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   const [versionLabel, setVersionLabel] = useState('');
   const [showStats, setShowStats] = useState(false);
   const [showFindReplace, setShowFindReplace] = useState(false);
+  const [canvasDark, setCanvasDark] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('scripta_canvas_dark') === 'true';
+    return false;
+  });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<{ getHTML: () => string; setContent: (html: string) => void; editor?: Editor | null } | null>(null);
 
@@ -80,6 +84,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         createdAt: doc?.createdAt ?? new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         wordCount: wc,
+        tags: doc?.tags,
+        pinned: doc?.pinned,
       };
       saveDocument(updated);
       setDoc(updated);
@@ -125,6 +131,18 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     triggerSave(versionContent, title);
     setShowVersions(false);
   }, [title, triggerSave]);
+
+  const handleInsertCitation = useCallback((text: string) => {
+    editorRef.current?.editor?.commands.insertContent(text);
+  }, []);
+
+  function toggleCanvasDark() {
+    setCanvasDark(prev => {
+      const next = !prev;
+      localStorage.setItem('scripta_canvas_dark', String(next));
+      return next;
+    });
+  }
 
   function togglePanel(panel: PanelId) {
     setActivePanel(prev => prev === panel ? null : panel);
@@ -177,6 +195,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
           });
         }}
         onShowStats={() => setShowStats(true)}
+        canvasDark={canvasDark}
+        onToggleCanvasDark={toggleCanvasDark}
         onExportPDF={() => {
           const html = editorRef.current?.getHTML() ?? '';
           const docHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -262,6 +282,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
               accentColor={activePanel === 'ai' ? 'var(--accent2)' : activePanel === 'latex' ? 'var(--accent3)' : 'var(--accent)'}
               latexContent={content}
               content={content}
+              documentId={documentId}
+              onInsertCitation={handleInsertCitation}
               onClose={() => setActivePanel(null)}
               inline
             />
@@ -276,6 +298,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
           mode={mode}
           editorRef={editorRef}
           focusMode={focusMode}
+          canvasDark={canvasDark}
         />
       </div>
 
@@ -307,6 +330,7 @@ interface TopBarProps {
   mode: EditorMode;
   focusMode: boolean;
   versionLabel: string;
+  canvasDark: boolean;
   onVersionLabelChange: (v: string) => void;
   onTitleChange: (t: string) => void;
   onModeChange: (m: EditorMode) => void;
@@ -316,11 +340,12 @@ interface TopBarProps {
   onExportPDF: () => void;
   onExportMarkdown: () => void;
   onToggleFocus: () => void;
+  onToggleCanvasDark: () => void;
   onShowStats: () => void;
   wordCount: number;
 }
 
-function TopBar({ title, saveStatus, mode, focusMode, versionLabel, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, onToggleFocus, onShowStats, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, focusMode, versionLabel, canvasDark, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, onToggleFocus, onToggleCanvasDark, onShowStats, wordCount }: TopBarProps) {
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
@@ -371,6 +396,7 @@ function TopBar({ title, saveStatus, mode, focusMode, versionLabel, onVersionLab
         </div>
         <div style={{ width: '1px', height: '24px', background: 'var(--border)' }} />
         <button onClick={onShowStats} title="Statistiques du document" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>≡ Stats</button>
+        <button onClick={onToggleCanvasDark} title={canvasDark ? 'Passer en fond clair' : 'Passer en fond sombre'} style={{ fontFamily: "'Syne', sans-serif", fontSize: '13px', fontWeight: 600, padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: canvasDark ? 'var(--surface3)' : 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>{canvasDark ? '☀' : '🌙'}</button>
         <button onClick={onToggleFocus} title="Mode focus (distraction-free)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>⛶ Focus</button>
         <input
           value={versionLabel}

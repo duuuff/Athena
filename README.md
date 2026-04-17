@@ -208,11 +208,78 @@ src/
 
 ---
 
+---
+
+## Améliorations implémentées (Session 4 — 2026-04-17)
+
+### 1. Bibliographie fonctionnelle (RefsPanel)
+- CRUD complet : formulaire d'ajout (auteurs *, titre *, année, journal/conférence/éditeur, URL optionnelle)
+- Auto-numérotation `[1]`, `[2]`… — renumérote automatiquement à chaque suppression
+- Bouton **↩ Insérer [N]** : insère la citation à la position du curseur TipTap via `editor.commands.insertContent`
+- Bouton **✎ Éditer** : charge les champs dans le formulaire, mode édition
+- Suppression avec confirmation inline (double-clic → rouge → confirme)
+- Persistance par document dans localStorage (`scripta_refs_<docId>`)
+- Compteur de références dans l'en-tête du panel
+- Validation : bouton désactivé si auteurs ou titre manquants
+
+### 2. Tags colorés sur les documents (Dashboard)
+- 8 tags prédéfinis avec couleurs propres : Thèse, Rapport, Article, CV, Brouillon, Travail, Perso, Urgent
+- Popover d'ajout/retrait (icône 🏷) visible au survol de chaque carte/ligne
+- Badges colorés affichés sur les cartes (grille) et les lignes (liste)
+- **Filtre par tag** : barre de capsules cliquables sous les contrôles — filtre multi-tag (AND)
+- Bouton "✕ Effacer" pour réinitialiser le filtre de tags
+- Définis dans `TAG_PRESETS` (`src/lib/types.ts`) pour cohérence dashboard ↔ popover
+- Champ `tags: string[]` ajouté à l'interface `Document` ; préservé lors de l'auto-save
+
+### 3. Épingler des documents (Dashboard)
+- Bouton 📌 au survol de chaque carte/ligne → toggle `pinned: boolean`
+- Documents épinglés : toujours en tête de liste, avant le tri normal
+- Bordure et icône violette distinctive pour les cartes épinglées
+- Icône miniature 📌 dans la vue liste à la place de 📄
+- Champ `pinned: boolean` ajouté à l'interface `Document` ; préservé lors de l'auto-save
+
+### 4. Mode sombre du canvas (éditeur)
+- Bouton 🌙 / ☀ dans la TopBar de l'éditeur
+- Bascule le fond du canvas : `#e8e7e3` (clair) ↔ `#111115` (sombre)
+- Fond des feuilles A4 : `var(--doc-bg)` (clair) ↔ `#1e1e2e` (sombre)
+- Classe CSS `.canvas-dark` appliquée au wrapper contenu — override complet du thème ProseMirror (texte, titres, tableaux, blockquotes, code…)
+- Préférence persistée dans localStorage (`scripta_canvas_dark`)
+
+---
+
+## Améliorations planifiées (Session 4 — 2026-04-17) [COMPLÉTÉ]
+
+### 1. Bibliographie fonctionnelle
+- Panneau `refs` : CRUD complet (ajout formulaire, suppression)
+- Champs : auteurs, titre, année, journal/conférence, URL (optionnel)
+- Auto-numérotation `[1]`, `[2]`... — persistance localStorage par document (clé `scripta_refs_<docId>`)
+- Bouton « Insérer » : insère la citation `[N]` à la position du curseur TipTap via `editor.commands.insertContent`
+- Passage de `documentId` et `onInsertCitation(text)` callback depuis EditorPage → SidebarPanel → RefsPanel
+
+### 2. Tags colorés sur les documents
+- Nouveau champ `tags: string[]` dans l'interface `Document`
+- 8 tags prédéfinis colorés (Thèse, Rapport, Article, CV, Brouillon, Travail, Perso, Urgent)
+- Gestion via popover sur les cartes du dashboard (ajout / retrait)
+- Filtre par tag dans la barre de recherche du dashboard (dropdown multi-sélection)
+
+### 3. Épingler des documents
+- Nouveau champ `pinned: boolean` dans l'interface `Document`
+- Icône punaise sur chaque carte/ligne du dashboard (toggle)
+- Documents épinglés : section dédiée en haut de la liste, avant le tri normal
+
+### 4. Mode sombre du canvas
+- Toggle 🌙 / ☀ dans la TopBar de l'éditeur
+- Bascule le fond du canvas entre blanc (`#faf9f7`) et sombre (`#1a1a22`)
+- Texte du document adapté en conséquence (couleur du corps de texte inversée)
+- Préférence persistée dans localStorage (`scripta_canvas_dark`)
+
+---
+
 ## Roadmap (non implémenté)
 
 - **Phase 3** : Intégration API Anthropic (panel IA fonctionnel : reformulation, génération, correction)
 - **Phase 4** : Backend (base de données, authentification, collaboration temps-réel)
 - **Export** : .docx, LaTeX compilable
-- **Bibliographie** : ajout/suppression/insertion de citations dans le document
-- **Mode nuit/jour** pour le canvas (fond blanc vs fond sombre)
-- **Tags / dossiers** sur le dashboard
+- **Dossiers / espaces de travail** sur le dashboard (groupement de documents)
+- **Import** : fichier .md, .docx, .tex
+- **Collaboration** : commentaires, suggestions de révision, multi-curseur
