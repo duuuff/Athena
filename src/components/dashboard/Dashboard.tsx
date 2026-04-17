@@ -207,6 +207,25 @@ export default function Dashboard() {
       </header>
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 32px' }}>
+        {/* Stats banner */}
+        {documents.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+            {[
+              { label: 'Documents', value: documents.length, icon: '📄' },
+              { label: 'Mots au total', value: totalWords.toLocaleString('fr-FR'), icon: '✍️' },
+              { label: 'Temps de lecture', value: `~${Math.ceil(totalWords / 200)} min`, icon: '⏱' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '20px' }}>{s.icon}</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent)', fontFamily: "'Syne', sans-serif", lineHeight: 1.2 }}>{s.value}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* New document section */}
         <section style={{ marginBottom: '48px' }}>
           <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '16px', fontFamily: "'DM Mono', monospace" }}>

@@ -336,7 +336,7 @@ function TopBar({ title, saveStatus, mode, focusMode, onTitleChange, onModeChang
         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusConfig.color, display: 'inline-block', animation: statusConfig.pulse ? 'pulse 2s infinite' : 'none' }} />
         {statusConfig.label}
       </div>
-      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots</span>}
+      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots · ~{Math.ceil(wordCount / 200)} min</span>}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>

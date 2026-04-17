@@ -165,6 +165,29 @@ src/
 
 ---
 
+## Améliorations implémentées (Session 3 — 2026-04-17)
+
+### 1. Bannière de statistiques (Dashboard)
+- 3 cartes en haut du dashboard (visible dès le premier document) : nombre de documents, total de mots, temps de lecture global
+- Complète le compteur inline déjà présent dans le header
+
+### 2. Temps de lecture estimé (TopBar éditeur)
+- Affichage `N mots · ~X min` (base : 200 mots/min) dans la barre supérieure
+- S'adapte en temps réel au compteur de mots live
+
+### 3. Bouton Copier dans le panneau LaTeX
+- Bouton « Copier » dans l'en-tête du panneau LaTeX
+- Copie le source LaTeX complet (avec header `\documentclass`) dans le presse-papiers
+- Feedback visuel `✓ Copié` pendant 2 secondes
+
+### 4. Modal Recherche & Remplacement (FindReplaceModal)
+- Accès via Ctrl+H / Cmd+H  
+- « Compter » : compte les occurrences sans modifier (traversal ProseMirror)
+- « Tout remplacer » : remplace via transactions ProseMirror en ordre inverse
+- Feedback coloré : violet = trouvé, vert = remplacé, gris = aucun résultat
+
+---
+
 ## Roadmap (non implémenté)
 
 - **Phase 2** : Export .docx, export Markdown, export LaTeX compilable
