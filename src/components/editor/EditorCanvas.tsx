@@ -178,50 +178,54 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
   }, [editor]);
 
   // ── Page break spacing engine ─────────────────────────────────────────────
-  // After each TipTap render, push block elements that start past a page boundary
-  // downward so they land in the content area of the next page.
+  // Pushes block elements that start past a page boundary downward so they
+  // land in the content area of the next page. Dead zone per boundary =
+  // bottom margin + gap + top margin = PAD_V + PAGE_GAP + PAD_V = 184 px.
   useEffect(() => {
     if (!editor) return;
     const dom = editor.view.dom as HTMLElement;
+    const DEAD = PAGE_H - CONTENT_H + PAGE_GAP; // 80+24+80 = 184 px
 
     const applyBreaks = () => {
       const children = Array.from(dom.children) as HTMLElement[];
       if (!children.length) return;
 
-      // ① Strip all previously-added extra margins so we read natural positions
-      const prevExtras = children.map(c => parseFloat((c as HTMLElement & { dataset: DOMStringMap }).dataset.pgExtra || '0'));
-      children.forEach((c, i) => {
-        if (prevExtras[i] > 0) {
+      // ① Strip all previously-added extras so DOM reflects natural positions.
+      children.forEach(c => {
+        const extra = parseFloat((c as HTMLElement & { dataset: DOMStringMap }).dataset.pgExtra || '0');
+        if (extra > 0) {
           const cur = parseFloat(c.style.marginTop) || 0;
-          const next = cur - prevExtras[i];
-          c.style.marginTop = next > 0 ? `${next}px` : '';
+          c.style.marginTop = (cur - extra) > 0 ? `${cur - extra}px` : '';
         }
         delete (c as HTMLElement & { dataset: DOMStringMap }).dataset.pgExtra;
       });
 
-      // ② Read natural offsetTop values (single reflow)
-      const naturalTops = children.map(c => c.offsetTop);
+      // ② Read natural offsetTop values — all at once to avoid repeated reflows.
+      //    These are TRUE natural positions (no extras) because we stripped above.
+      const tops = children.map(c => c.offsetTop);
 
-      // ③ Re-apply page-break margins
-      let cumulativeExtra = 0;
+      // ③ Apply page-break margins.
+      //    For a block at natural y, its page index = floor(y / CONTENT_H).
+      //    The total extra needed for page N = N * DEAD.
+      //    We only add the DIFFERENCE vs. what previous blocks already pushed.
+      let cumExtra = 0;
       for (let i = 0; i < children.length; i++) {
-        const child = children[i];
-        const naturalTop = naturalTops[i] - cumulativeExtra;
-        const targetPage = Math.floor(naturalTop / CONTENT_H);
-        const needed = targetPage * (PAGE_H - CONTENT_H + PAGE_GAP); // PAD_V*2 + GAP = 184
-        if (needed > cumulativeExtra) {
-          const extra = needed - cumulativeExtra;
-          const cur = parseFloat(child.style.marginTop) || 0;
-          child.style.marginTop = `${cur + extra}px`;
-          (child as HTMLElement & { dataset: DOMStringMap }).dataset.pgExtra = String(extra);
-          cumulativeExtra = needed;
+        const page   = Math.floor(tops[i] / CONTENT_H);
+        const needed = page * DEAD;
+        if (needed > cumExtra) {
+          const extra = needed - cumExtra;
+          const cur   = parseFloat(children[i].style.marginTop) || 0;
+          children[i].style.marginTop = `${cur + extra}px`;
+          (children[i] as HTMLElement & { dataset: DOMStringMap }).dataset.pgExtra = String(extra);
+          cumExtra = needed;
         }
       }
 
-      // ④ Update page count
-      setPageCount(Math.max(1, Math.ceil((dom.offsetHeight + PAD_V) / (CONTENT_H + PAD_V * 2 - CONTENT_H + PAGE_GAP + CONTENT_H))));
-      // Simplified: just use total editor height / CONTENT_H
-      setPageCount(Math.max(1, Math.ceil(dom.offsetHeight / CONTENT_H)));
+      // ④ Page count from total DOM height after extras are applied.
+      //    domH ≈ N*CONTENT_H + (N-1)*DEAD  →  N = ceil((domH + PAD_V) / (PAGE_H + PAGE_GAP))
+      const domH  = dom.offsetHeight;
+      const pages = Math.max(1, Math.ceil((domH + PAD_V) / (PAGE_H + PAGE_GAP)));
+      setPageCount(pages);
     };
 
     const schedule = () => {
@@ -229,11 +233,20 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
       rafRef.current = requestAnimationFrame(applyBreaks);
     };
 
-    const mo = new MutationObserver(schedule);
-    mo.observe(dom, { childList: true, subtree: false, characterData: false });
-    schedule();
+    // Trigger on every TipTap content change (typing, paste, formatting…)
+    editor.on('update', schedule);
 
-    return () => { mo.disconnect(); if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); };
+    // Also watch for structural DOM changes (image load, table resize, etc.)
+    const mo = new MutationObserver(schedule);
+    mo.observe(dom, { childList: true, subtree: false });
+
+    schedule(); // initial run
+
+    return () => {
+      editor.off('update', schedule);
+      mo.disconnect();
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    };
   }, [editor]);
 
   // ── Image click handler ───────────────────────────────────────────────────
@@ -297,7 +310,7 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
             </div>
           ))}
 
-          {/* Gap covers — hide content that falls in the inter-page gap (z-index 20) */}
+          {/* Inter-page gaps — visual separator between sheets (z-index 20) */}
           {Array.from({ length: pageCount - 1 }, (_, i) => (
             <div key={i} style={{
               position: 'absolute',
@@ -307,7 +320,18 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
               background: canvasDark ? '#111115' : '#e8e7e3',
               zIndex: 20,
               pointerEvents: 'none',
-            }} />
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <div style={{
+                fontSize: '9px',
+                fontFamily: "'DM Mono', monospace",
+                color: canvasDark ? '#444460' : '#bbb',
+                letterSpacing: '1px',
+                userSelect: 'none',
+              }}>· · ·</div>
+            </div>
           ))}
 
           {/* Content — spans all pages (z-index 10) */}
