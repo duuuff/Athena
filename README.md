@@ -1,38 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ScriptaAI — Éditeur de documents académiques
 
-> Modifié par Claude Code — test de synchronisation git.
+> Meilleur que Word. Plus simple qu'Overleaf. Boosté à l'IA.
 
-## Getting Started
+**Stack** : Next.js 16, React 19, TipTap 3, TypeScript, Tailwind CSS, localStorage
 
-First, run the development server:
+---
+
+## Lancer le projet
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+---
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## ✅ Fonctionnalités implémentées
 
-## Learn More
+### Dashboard
+- Liste des documents avec recherche en temps réel
+- Modèles : document vierge, thèse/mémoire, rapport technique, article scientifique, CV académique
+- Aperçu miniature des documents (rendu HTML miniaturisé)
+- Suppression avec modale de confirmation
+- Formatage de date relatif (« Il y a 5 min », « Hier »…)
+- Bannière de statistiques (nbre de documents, total de mots)
+- Options de tri : plus récent, alphabétique, nombre de mots
 
-To learn more about Next.js, take a look at the following resources:
+### Éditeur
+- Éditeur riche TipTap avec rendu A4 multi-pages (794 px × 1123 px)
+- Autosauvegarde avec délai 2 secondes
+- Compteur de mots en temps réel + temps de lecture estimé
+- 3 modes d'affichage : Visuel, Split, LaTeX
+- Barre de titre éditable + indicateur de statut de sauvegarde
+- Historique des versions (sauvegarder + restaurer, max 20 versions par doc)
+- Export PDF via iframe d'impression (mise en page A4)
+- **Mode Focus** : écriture sans distraction (masque toolbar et panneaux)
+- **Recherche & Remplacement** : modal Ctrl+H avec comptage de correspondances
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Barre d'outils (Toolbar)
+- Sélecteur de style (H1-H4, citation, code)
+- Sélecteur de police (Crimson Pro, Syne, DM Mono, Arial, Georgia, Times)
+- Taille de police (8–72 px)
+- Gras, Italique, Souligné, Barré
+- Couleur de texte + surlignage multicolore
+- Alignement (Gauche, Centre, Droite, Justifié)
+- Listes (puces, numérotées, tâches avec cases à cocher)
+- Retrait / Sortie de retrait
+- Insertion d'image (fichier, glisser-déposer, coller depuis presse-papiers)
+- Modal d'équation LaTeX (∑)
+- Insertion de tableau 3×3 + contrôles contextuels (+ col, − col, + lig, − lig, ✕ tab)
+- Séparateur horizontal
+- Insertion de lien
+- Indice / Exposant
+- Annuler / Rétablir
+- Effacer la mise en forme
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Panneaux latéraux
+- **Panneau IA** : interface chat (non connecté — intégration Anthropic prévue Phase 3)
+- **Panneau LaTeX** : conversion pseudo-LaTeX du HTML + bouton copier dans presse-papiers
+- **Panneau Plan du document** : extraction et affichage hiérarchique des titres H1-H4
+- **Panneau Bibliographie** : données de démo avec bouton d'ajout
 
-## Deploy on Vercel
+### Stockage
+- Persistance localStorage (clés `scripta_documents`, `scripta_versions`)
+- CRUD complet des documents
+- Gestion des versions (max 20 par document, élagage automatique)
+- Comptage des mots (strip HTML)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+---
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 🗂 Structure des fichiers
+
+```
+src/
+├── app/
+│   ├── editor/[id]/page.tsx     → Route dynamique de l'éditeur
+│   ├── globals.css              → Variables CSS, styles TipTap, print
+│   ├── layout.tsx               → Layout racine
+│   └── page.tsx                 → Page d'accueil (→ Dashboard)
+├── components/
+│   ├── dashboard/
+│   │   └── Dashboard.tsx        → Liste docs, templates, tri, stats
+│   └── editor/
+│       ├── EditorPage.tsx       → Orchestrateur (état, sauvegarde, versioning)
+│       ├── EditorToolbar.tsx    → Barre d'outils formatting
+│       ├── EditorCanvas.tsx     → Rendu A4, pagination, TipTap
+│       ├── SidebarPanel.tsx     → Panneaux IA / LaTeX / TOC / Refs
+│       ├── VersionHistoryModal.tsx → Modal historique des versions
+│       ├── FindReplaceModal.tsx → Modal recherche & remplacement
+│       └── ImageSettingsPanel.tsx  → Panneau réglages image au clic
+└── lib/
+    ├── types.ts                 → Interfaces TypeScript
+    ├── storage.ts               → CRUD localStorage + countWords
+    └── defaultContent.ts        → Contenu par défaut des templates
+```
+
+---
+
+## 🔮 Prochaines étapes (non implémentées)
+
+- **Phase 3** : Intégration Anthropic Claude pour le panneau IA
+- **Contenu templates** : Contenu réel pour « Article scientifique » et « CV académique »
+- **Bibliographie** : Panneau Refs fonctionnel (ajout, suppression, insertion en citation)
+- **Footnotes / Annotations** : Notes de bas de page TipTap
+- **Collaboration** : Sync temps-réel (Y.js / CRDTs)
+- **Backend** : Migration localStorage → base de données (PostgreSQL / Supabase)

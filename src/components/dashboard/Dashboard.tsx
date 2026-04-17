@@ -61,19 +61,28 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+type SortMode = 'recent' | 'alpha' | 'words';
+
 export default function Dashboard() {
   const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sortMode, setSortMode] = useState<SortMode>('recent');
 
   useEffect(() => {
     setDocuments(getDocuments());
   }, []);
 
-  const filtered = documents.filter(d =>
-    d.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const totalWords = documents.reduce((sum: number, d: Document) => sum + (d.wordCount ?? 0), 0);
+
+  const filtered = documents
+    .filter((d: Document) => d.title.toLowerCase().includes(search.toLowerCase()))
+    .sort((a: Document, b: Document) => {
+      if (sortMode === 'alpha') return a.title.localeCompare(b.title, 'fr');
+      if (sortMode === 'words') return (b.wordCount ?? 0) - (a.wordCount ?? 0);
+      return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    });
 
   function createDocument(templateContent: string, templateLabel: string) {
     const doc: Document = {
@@ -157,6 +166,25 @@ export default function Dashboard() {
       </header>
 
       <main style={{ maxWidth: '1100px', margin: '0 auto', padding: '40px 32px' }}>
+        {/* Stats banner */}
+        {documents.length > 0 && (
+          <div style={{ display: 'flex', gap: '12px', marginBottom: '32px' }}>
+            {[
+              { label: 'Documents', value: documents.length, icon: '📄' },
+              { label: 'Mots au total', value: totalWords.toLocaleString('fr-FR'), icon: '✍️' },
+              { label: 'Temps de lecture', value: `~${Math.ceil(totalWords / 200)} min`, icon: '⏱' },
+            ].map(s => (
+              <div key={s.label} style={{ flex: 1, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '10px', padding: '14px 18px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '20px' }}>{s.icon}</span>
+                <div>
+                  <div style={{ fontSize: '18px', fontWeight: 800, color: 'var(--accent)', fontFamily: "'Syne', sans-serif", lineHeight: 1.2 }}>{s.value}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>{s.label}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* New document section */}
         <section style={{ marginBottom: '48px' }}>
           <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '16px', fontFamily: "'DM Mono', monospace" }}>
@@ -197,9 +225,24 @@ export default function Dashboard() {
 
         {/* Recent documents */}
         <section>
-          <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '16px', fontFamily: "'DM Mono', monospace" }}>
-            Documents récents {documents.length > 0 && <span style={{ color: 'var(--text3)' }}>({filtered.length})</span>}
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", margin: 0 }}>
+              Documents récents {documents.length > 0 && <span style={{ color: 'var(--text3)' }}>({filtered.length})</span>}
+            </h2>
+            {documents.length > 1 && (
+              <div style={{ display: 'flex', gap: '4px', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', padding: '2px', overflow: 'hidden' }}>
+                {([['recent', 'Récent'], ['alpha', 'A–Z'], ['words', 'Mots']] as [SortMode, string][]).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    onClick={() => setSortMode(mode)}
+                    style={{ fontSize: '11px', fontWeight: 600, padding: '4px 10px', borderRadius: '4px', border: 'none', background: sortMode === mode ? 'var(--surface3)' : 'transparent', color: sortMode === mode ? 'var(--accent)' : 'var(--text3)', cursor: 'pointer', fontFamily: "'Syne', sans-serif", transition: 'all 0.1s' }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {filtered.length === 0 ? (
             <div style={{

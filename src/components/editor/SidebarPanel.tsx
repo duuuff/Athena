@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { PanelId } from '@/lib/types';
 
 interface SidebarPanelProps {
@@ -107,6 +108,8 @@ function AIPanel({ onClose }: { onClose?: () => void }) {
 
 // ===== LaTeX PANEL =====
 function LaTeXPanel({ content, onClose }: { content: string; onClose?: () => void }) {
+  const [copied, setCopied] = useState(false);
+
   // Convert HTML to pseudo-LaTeX for display
   const latex = content
     .replace(/<h1[^>]*>(.*?)<\/h1>/gi, (_, t) => `\\title{${stripTags(t)}}\n`)
@@ -126,9 +129,33 @@ function LaTeXPanel({ content, onClose }: { content: string; onClose?: () => voi
     .replace(/&nbsp;/g, ' ')
     .trim();
 
+  const fullLatex = `% Généré automatiquement par ScriptaAI\n\\documentclass[12pt,a4paper]{article}\n\\usepackage{amsmath, amssymb}\n\\usepackage{parallel}\n\\usepackage{graphicx}\n\n\\begin{document}\n\n${latex}\n\n\\end{document}`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(fullLatex).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <PanelHeader title="LaTeX Source" icon="{}" accentColor="var(--accent3)" monoTitle onClose={onClose} />
+      <div style={{ height: '44px', display: 'flex', alignItems: 'center', padding: '0 10px 0 14px', borderBottom: '1px solid var(--border)', gap: '8px', flexShrink: 0 }}>
+        <span style={{ fontSize: '13px' }}>{'{}'}</span>
+        <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '12px', fontWeight: 700, color: 'var(--accent3)', flex: 1 }}>LaTeX Source</span>
+        <button
+          onClick={handleCopy}
+          style={{ fontSize: '11px', fontWeight: 600, fontFamily: "'Syne', sans-serif", padding: '4px 10px', borderRadius: '5px', border: '1px solid var(--border)', background: copied ? 'var(--green)' : 'var(--surface2)', color: copied ? 'white' : 'var(--text2)', cursor: 'pointer', flexShrink: 0, transition: 'all 0.2s' }}
+        >
+          {copied ? '✓ Copié' : 'Copier'}
+        </button>
+        {onClose && (
+          <button onClick={onClose} style={{ width: '24px', height: '24px', background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '4px', flexShrink: 0 }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text)'}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'}
+          >✕</button>
+        )}
+      </div>
       <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px' }}>
         <pre style={{
           fontFamily: "'DM Mono', monospace",
@@ -139,7 +166,7 @@ function LaTeXPanel({ content, onClose }: { content: string; onClose?: () => voi
           wordBreak: 'break-word',
           margin: 0,
         }}>
-          {`% Généré automatiquement par ScriptaAI\n\\documentclass[12pt,a4paper]{article}\n\\usepackage{amsmath, amssymb}\n\\usepackage{parallel}\n\\usepackage{graphicx}\n\n\\begin{document}\n\n${latex}\n\n\\end{document}`}
+          {fullLatex}
         </pre>
       </div>
     </div>

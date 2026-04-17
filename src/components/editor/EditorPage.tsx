@@ -8,6 +8,7 @@ import EditorToolbar from './EditorToolbar';
 import EditorCanvas from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
 import VersionHistoryModal from './VersionHistoryModal';
+import FindReplaceModal from './FindReplaceModal';
 import { v4 as uuidv4 } from 'uuid';
 import { Editor } from '@tiptap/react';
 
@@ -29,6 +30,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [liveWordCount, setLiveWordCount] = useState(0);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<{ getHTML: () => string; setContent: (html: string) => void; editor?: Editor | null } | null>(null);
 
@@ -84,6 +87,17 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     triggerSave(versionContent, title);
     setShowVersions(false);
   }, [title, triggerSave]);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'h') {
+        e.preventDefault();
+        setShowFindReplace(f => !f);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   function togglePanel(panel: PanelId) {
     setActivePanel(prev => prev === panel ? null : panel);
@@ -164,16 +178,18 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         onSaveVersion={handleSaveVersion}
         onShowVersions={() => { setVersions(getVersions(documentId)); setShowVersions(true); }}
         wordCount={liveWordCount}
+        focusMode={focusMode}
+        onToggleFocus={() => setFocusMode(f => !f)}
       />
 
-      <EditorToolbar editorRef={editorRef} />
+      {!focusMode && <EditorToolbar editorRef={editorRef} />}
 
       {/* MAIN AREA: sidebar icons | panel (in-flow) | editor */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <LeftSidebar activePanel={activePanel} onTogglePanel={togglePanel} />
+        {!focusMode && <LeftSidebar activePanel={activePanel} onTogglePanel={togglePanel} />}
 
         {/* In-flow panel — pushes the editor canvas */}
-        {activePanel && (
+        {!focusMode && activePanel && (
           <div style={{
             width: '320px',
             flexShrink: 0,
@@ -216,6 +232,13 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         />
       )}
 
+      {showFindReplace && (
+        <FindReplaceModal
+          editor={editorRef.current?.editor ?? null}
+          onClose={() => setShowFindReplace(false)}
+        />
+      )}
+
       <style>{`
         @keyframes slideIn { from { width: 0; opacity: 0; } to { width: 320px; opacity: 1; } }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
@@ -236,9 +259,11 @@ interface TopBarProps {
   onShowVersions: () => void;
   onExportPDF: () => void;
   wordCount: number;
+  focusMode: boolean;
+  onToggleFocus: () => void;
 }
 
-function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, wordCount, focusMode, onToggleFocus }: TopBarProps) {
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
@@ -264,7 +289,7 @@ function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, 
         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusConfig.color, display: 'inline-block', animation: statusConfig.pulse ? 'pulse 2s infinite' : 'none' }} />
         {statusConfig.label}
       </div>
-      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots</span>}
+      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots · ~{Math.ceil(wordCount / 200)} min</span>}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
@@ -278,6 +303,9 @@ function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, 
         <button onClick={onSaveVersion} title="Sauvegarder une version" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>💾 Version</button>
         <button onClick={onShowVersions} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>Historique</button>
         <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>Exporter PDF</button>
+        <button onClick={onToggleFocus} title={focusMode ? 'Quitter le mode focus' : 'Mode focus'} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: focusMode ? 'rgba(124,106,255,0.15)' : 'var(--surface2)', color: focusMode ? 'var(--accent2)' : 'var(--text2)', cursor: 'pointer' }}>
+          {focusMode ? '✕ Focus' : '⊙ Focus'}
+        </button>
         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent2), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'white', cursor: 'pointer', flexShrink: 0 }}>ML</div>
       </div>
     </div>
