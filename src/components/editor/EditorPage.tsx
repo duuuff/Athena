@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getDocument, saveDocument, saveVersion, getVersions, countWords } from '@/lib/storage';
 import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId } from '@/lib/types';
+import { htmlToMarkdown } from '@/lib/htmlToMarkdown';
 import EditorToolbar from './EditorToolbar';
 import EditorCanvas from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
@@ -29,6 +30,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [liveWordCount, setLiveWordCount] = useState(0);
+  const [versionLabel, setVersionLabel] = useState('');
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<{ getHTML: () => string; setContent: (html: string) => void; editor?: Editor | null } | null>(null);
 
@@ -73,10 +75,12 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   }, [content, triggerSave]);
 
   const handleSaveVersion = useCallback(() => {
-    const label = `Version — ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
+    const label = versionLabel.trim()
+      || `Version — ${new Date().toLocaleString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}`;
     saveVersion({ id: uuidv4(), documentId, content, savedAt: new Date().toISOString(), label });
     setVersions(getVersions(documentId));
-  }, [documentId, content]);
+    setVersionLabel('');
+  }, [documentId, content, versionLabel]);
 
   const handleRestoreVersion = useCallback((versionContent: string) => {
     setContent(versionContent);
@@ -84,6 +88,19 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     triggerSave(versionContent, title);
     setShowVersions(false);
   }, [title, triggerSave]);
+
+  const handleExportMarkdown = useCallback(() => {
+    const html = editorRef.current?.getHTML() ?? content;
+    const md = htmlToMarkdown(html);
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${title || 'document'}.md`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
+  }, [content, title]);
 
   function togglePanel(panel: PanelId) {
     setActivePanel(prev => prev === panel ? null : panel);
@@ -112,6 +129,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         title={title}
         saveStatus={saveStatus}
         mode={mode}
+        versionLabel={versionLabel}
+        onVersionLabelChange={setVersionLabel}
         onTitleChange={handleTitleChange}
         onModeChange={handleModeChange}
         onBack={() => router.push('/')}
@@ -147,7 +166,6 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   a { color: #7c6aff; }
 </style></head><body>${html}</body></html>`;
 
-          // Use a hidden iframe to print without opening a new window
           const iframe = document.createElement('iframe');
           iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;';
           document.body.appendChild(iframe);
@@ -161,6 +179,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
             setTimeout(() => document.body.removeChild(iframe), 1000);
           }, 500);
         }}
+        onExportMarkdown={handleExportMarkdown}
         onSaveVersion={handleSaveVersion}
         onShowVersions={() => { setVersions(getVersions(documentId)); setShowVersions(true); }}
         wordCount={liveWordCount}
@@ -229,22 +248,27 @@ interface TopBarProps {
   title: string;
   saveStatus: SaveStatus;
   mode: EditorMode;
+  versionLabel: string;
+  onVersionLabelChange: (v: string) => void;
   onTitleChange: (t: string) => void;
   onModeChange: (m: EditorMode) => void;
   onBack: () => void;
   onSaveVersion: () => void;
   onShowVersions: () => void;
   onExportPDF: () => void;
+  onExportMarkdown: () => void;
   wordCount: number;
 }
 
-function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, versionLabel, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, wordCount }: TopBarProps) {
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
     unsaved: { color: 'var(--orange)', label: 'Non sauvegardé', pulse: false },
     error: { color: 'var(--red)', label: 'Erreur', pulse: false },
   }[saveStatus];
+
+  const readingTime = wordCount > 0 ? Math.max(1, Math.ceil(wordCount / 200)) : 0;
 
   return (
     <div style={{ height: '48px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 16px 0 calc(var(--sidebar-w) + 16px)', gap: '10px', flexShrink: 0 }}>
@@ -264,7 +288,12 @@ function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, 
         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusConfig.color, display: 'inline-block', animation: statusConfig.pulse ? 'pulse 2s infinite' : 'none' }} />
         {statusConfig.label}
       </div>
-      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots</span>}
+      {wordCount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+          <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap' }}>{wordCount} mots</span>
+          <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap' }}>· {readingTime} min</span>
+        </div>
+      )}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
@@ -275,9 +304,35 @@ function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, 
           ))}
         </div>
         <div style={{ width: '1px', height: '24px', background: 'var(--border)' }} />
-        <button onClick={onSaveVersion} title="Sauvegarder une version" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>💾 Version</button>
+
+        {/* Version label input + save button */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <input
+            value={versionLabel}
+            onChange={e => onVersionLabelChange(e.target.value)}
+            placeholder="Nom de la version…"
+            onKeyDown={e => { if (e.key === 'Enter') onSaveVersion(); }}
+            style={{
+              width: '140px',
+              fontFamily: "'Syne', sans-serif",
+              fontSize: '11px',
+              padding: '4px 8px',
+              borderRadius: '6px',
+              border: '1px solid var(--border)',
+              background: 'var(--surface2)',
+              color: 'var(--text2)',
+              outline: 'none',
+            }}
+          />
+          <button onClick={onSaveVersion} title="Sauvegarder une version" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>💾</button>
+        </div>
+
         <button onClick={onShowVersions} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>Historique</button>
-        <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>Exporter PDF</button>
+
+        {/* Export buttons */}
+        <button onClick={onExportMarkdown} title="Télécharger en Markdown" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>↓ MD</button>
+        <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>↓ PDF</button>
+
         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent2), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'white', cursor: 'pointer', flexShrink: 0 }}>ML</div>
       </div>
     </div>
