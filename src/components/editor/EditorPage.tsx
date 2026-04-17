@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { getDocument, saveDocument, saveVersion, getVersions, countWords } from '@/lib/storage';
-import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId } from '@/lib/types';
+import { getDocument, saveDocument, saveVersion, getVersions, countWords, computeStats } from '@/lib/storage';
+import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId, DocStats } from '@/lib/types';
 import EditorToolbar from './EditorToolbar';
 import EditorCanvas from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
 import VersionHistoryModal from './VersionHistoryModal';
+import FindReplaceBar from './FindReplaceBar';
+import StatsModal from './StatsModal';
 import { v4 as uuidv4 } from 'uuid';
 import { Editor } from '@tiptap/react';
 
@@ -29,6 +31,9 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   const [showVersions, setShowVersions] = useState(false);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
   const [liveWordCount, setLiveWordCount] = useState(0);
+  const [focusMode, setFocusMode] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [showFindReplace, setShowFindReplace] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<{ getHTML: () => string; setContent: (html: string) => void; editor?: Editor | null } | null>(null);
 
@@ -40,6 +45,25 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     setContent(loaded.content);
     setLiveWordCount(loaded.wordCount);
   }, [documentId, router]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    function handleKey(e: KeyboardEvent) {
+      const mod = e.ctrlKey || e.metaKey;
+      if (e.key === 'Escape' && focusMode) {
+        setFocusMode(false);
+        return;
+      }
+      if (mod && e.key === 'f') {
+        e.preventDefault();
+        if (focusMode) return;
+        setShowFindReplace(prev => !prev);
+        return;
+      }
+    }
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [focusMode]);
 
   const triggerSave = useCallback((newContent: string, newTitle: string) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -98,6 +122,16 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     }
   }
 
+  function handleReplace(search: string, replacement: string, replaceAll: boolean) {
+    const html = editorRef.current?.getHTML() ?? '';
+    if (!search) return;
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(escaped, replaceAll ? 'gi' : 'i');
+    const newHtml = html.replace(regex, replacement);
+    editorRef.current?.setContent(newHtml);
+    handleContentChange(newHtml);
+  }
+
   if (!doc) {
     return (
       <div style={{ height: '100vh', background: 'var(--bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -106,15 +140,26 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     );
   }
 
+  const stats: DocStats = computeStats(content);
+
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden', fontFamily: "'Syne', sans-serif" }}>
       <TopBar
         title={title}
         saveStatus={saveStatus}
         mode={mode}
+        focusMode={focusMode}
         onTitleChange={handleTitleChange}
         onModeChange={handleModeChange}
         onBack={() => router.push('/')}
+        onToggleFocus={() => {
+          setFocusMode(f => {
+            const next = !f;
+            if (next) { setActivePanel(null); setShowFindReplace(false); }
+            return next;
+          });
+        }}
+        onShowStats={() => setShowStats(true)}
         onExportPDF={() => {
           const html = editorRef.current?.getHTML() ?? '';
           const docHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -147,7 +192,6 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   a { color: #7c6aff; }
 </style></head><body>${html}</body></html>`;
 
-          // Use a hidden iframe to print without opening a new window
           const iframe = document.createElement('iframe');
           iframe.style.cssText = 'position:fixed;top:-9999px;left:-9999px;width:0;height:0;border:none;';
           document.body.appendChild(iframe);
@@ -166,14 +210,21 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         wordCount={liveWordCount}
       />
 
-      <EditorToolbar editorRef={editorRef} />
+      {!focusMode && <EditorToolbar editorRef={editorRef} />}
+      {!focusMode && showFindReplace && (
+        <FindReplaceBar
+          editorRef={editorRef}
+          content={content}
+          onReplace={handleReplace}
+          onClose={() => setShowFindReplace(false)}
+        />
+      )}
 
-      {/* MAIN AREA: sidebar icons | panel (in-flow) | editor */}
+      {/* MAIN AREA */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
-        <LeftSidebar activePanel={activePanel} onTogglePanel={togglePanel} />
+        {!focusMode && <LeftSidebar activePanel={activePanel} onTogglePanel={togglePanel} />}
 
-        {/* In-flow panel — pushes the editor canvas */}
-        {activePanel && (
+        {!focusMode && activePanel && (
           <div style={{
             width: '320px',
             flexShrink: 0,
@@ -204,6 +255,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
           onZoomChange={setZoom}
           mode={mode}
           editorRef={editorRef}
+          focusMode={focusMode}
         />
       </div>
 
@@ -214,6 +266,10 @@ export default function EditorPage({ documentId }: EditorPageProps) {
           onRestore={handleRestoreVersion}
           onClose={() => setShowVersions(false)}
         />
+      )}
+
+      {showStats && (
+        <StatsModal stats={stats} title={title} onClose={() => setShowStats(false)} />
       )}
 
       <style>{`
@@ -229,22 +285,38 @@ interface TopBarProps {
   title: string;
   saveStatus: SaveStatus;
   mode: EditorMode;
+  focusMode: boolean;
   onTitleChange: (t: string) => void;
   onModeChange: (m: EditorMode) => void;
   onBack: () => void;
   onSaveVersion: () => void;
   onShowVersions: () => void;
   onExportPDF: () => void;
+  onToggleFocus: () => void;
+  onShowStats: () => void;
   wordCount: number;
 }
 
-function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, focusMode, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onToggleFocus, onShowStats, wordCount }: TopBarProps) {
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
     unsaved: { color: 'var(--orange)', label: 'Non sauvegardé', pulse: false },
     error: { color: 'var(--red)', label: 'Erreur', pulse: false },
   }[saveStatus];
+
+  if (focusMode) {
+    return (
+      <div style={{ height: '36px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 20px', gap: '10px', flexShrink: 0, opacity: 0.7 }}>
+        <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text3)', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title || 'Sans titre'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '10px', color: statusConfig.color, fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <span style={{ width: '5px', height: '5px', borderRadius: '50%', background: statusConfig.color, display: 'inline-block', animation: statusConfig.pulse ? 'pulse 2s infinite' : 'none' }} />
+          {statusConfig.label}
+        </div>
+        <button onClick={onToggleFocus} title="Quitter le mode focus (Échap)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '11px', fontWeight: 600, padding: '3px 10px', borderRadius: '5px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text3)', cursor: 'pointer' }}>✕ Focus</button>
+      </div>
+    );
+  }
 
   return (
     <div style={{ height: '48px', background: 'var(--surface)', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', padding: '0 16px 0 calc(var(--sidebar-w) + 16px)', gap: '10px', flexShrink: 0 }}>
@@ -275,6 +347,8 @@ function TopBar({ title, saveStatus, mode, onTitleChange, onModeChange, onBack, 
           ))}
         </div>
         <div style={{ width: '1px', height: '24px', background: 'var(--border)' }} />
+        <button onClick={onShowStats} title="Statistiques du document" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>≡ Stats</button>
+        <button onClick={onToggleFocus} title="Mode focus (distraction-free)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>⛶ Focus</button>
         <button onClick={onSaveVersion} title="Sauvegarder une version" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>💾 Version</button>
         <button onClick={onShowVersions} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>Historique</button>
         <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>Exporter PDF</button>

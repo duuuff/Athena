@@ -1,4 +1,4 @@
-import { Document, DocumentVersion } from './types';
+import { Document, DocumentVersion, DocStats } from './types';
 
 const DOCUMENTS_KEY = 'scripta_documents';
 const VERSIONS_KEY = 'scripta_versions';
@@ -73,4 +73,15 @@ export function countWords(html: string): number {
   const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!text) return 0;
   return text.split(' ').filter(Boolean).length;
+}
+
+export function computeStats(html: string): DocStats {
+  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const words = text ? text.split(' ').filter(Boolean).length : 0;
+  const chars = text.length;
+  const charsNoSpaces = text.replace(/\s/g, '').length;
+  const paragraphs = (html.match(/<p[^>]*>/gi) ?? []).length;
+  const headings = (html.match(/<h[1-4][^>]*>/gi) ?? []).length;
+  const readingMinutes = Math.max(1, Math.round(words / 200));
+  return { words, chars, charsNoSpaces, paragraphs, headings, readingMinutes };
 }

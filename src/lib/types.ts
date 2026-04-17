@@ -20,3 +20,12 @@ export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 export type EditorMode = 'visual' | 'split' | 'latex';
 
 export type PanelId = 'ai' | 'org' | 'latex' | 'toc' | 'refs' | null;
+
+export interface DocStats {
+  words: number;
+  chars: number;
+  charsNoSpaces: number;
+  paragraphs: number;
+  headings: number;
+  readingMinutes: number;
+}

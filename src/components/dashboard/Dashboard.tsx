@@ -45,6 +45,15 @@ const TEMPLATES = [
   },
 ];
 
+type SortKey = 'newest' | 'oldest' | 'alpha' | 'words';
+
+const SORT_LABELS: Record<SortKey, string> = {
+  newest: 'Plus récent',
+  oldest: 'Plus ancien',
+  alpha: 'A → Z',
+  words: 'Plus long',
+};
+
 function formatDate(iso: string) {
   const d = new Date(iso);
   const now = new Date();
@@ -61,19 +70,42 @@ function formatDate(iso: string) {
   return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
 
+function sortDocuments(docs: Document[], key: SortKey): Document[] {
+  const copy = [...docs];
+  switch (key) {
+    case 'newest': return copy.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    case 'oldest': return copy.sort((a, b) => new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime());
+    case 'alpha': return copy.sort((a, b) => a.title.localeCompare(b.title, 'fr'));
+    case 'words': return copy.sort((a, b) => b.wordCount - a.wordCount);
+  }
+}
+
 export default function Dashboard() {
   const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [search, setSearch] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<SortKey>('newest');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
     setDocuments(getDocuments());
   }, []);
 
-  const filtered = documents.filter(d =>
-    d.title.toLowerCase().includes(search.toLowerCase())
+  // Close sort menu on outside click
+  useEffect(() => {
+    if (!showSortMenu) return;
+    const handler = () => setShowSortMenu(false);
+    window.addEventListener('click', handler);
+    return () => window.removeEventListener('click', handler);
+  }, [showSortMenu]);
+
+  const filtered = sortDocuments(
+    documents.filter(d => d.title.toLowerCase().includes(search.toLowerCase())),
+    sortKey,
   );
+
+  const totalWords = documents.reduce((sum, d) => sum + d.wordCount, 0);
 
   function createDocument(templateContent: string, templateLabel: string) {
     const doc: Document = {
@@ -92,6 +124,19 @@ export default function Dashboard() {
     deleteDocument(id);
     setDocuments(getDocuments());
     setDeleteId(null);
+  }
+
+  function handleDuplicate(doc: Document, e: React.MouseEvent) {
+    e.stopPropagation();
+    const copy: Document = {
+      ...doc,
+      id: uuidv4(),
+      title: `${doc.title} (Copie)`,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    saveDocument(copy);
+    setDocuments(getDocuments());
   }
 
   return (
@@ -113,6 +158,11 @@ export default function Dashboard() {
           <span style={{ fontSize: '18px', fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--accent)' }}>
             Scripta<span style={{ color: 'var(--accent3)' }}>AI</span>
           </span>
+          {documents.length > 0 && (
+            <span style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>
+              {documents.length} doc{documents.length > 1 ? 's' : ''} · {totalWords.toLocaleString('fr-FR')} mots
+            </span>
+          )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <div style={{
@@ -197,9 +247,56 @@ export default function Dashboard() {
 
         {/* Recent documents */}
         <section>
-          <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', marginBottom: '16px', fontFamily: "'DM Mono', monospace" }}>
-            Documents récents {documents.length > 0 && <span style={{ color: 'var(--text3)' }}>({filtered.length})</span>}
-          </h2>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+            <h2 style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '1.5px', textTransform: 'uppercase', color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>
+              Documents récents {documents.length > 0 && <span>({filtered.length})</span>}
+            </h2>
+
+            {/* Sort dropdown */}
+            {documents.length > 1 && (
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={e => { e.stopPropagation(); setShowSortMenu(v => !v); }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '6px',
+                    background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px',
+                    padding: '5px 10px', color: 'var(--text2)', fontSize: '11px', fontWeight: 600,
+                    cursor: 'pointer', fontFamily: "'Syne', sans-serif",,
+                  }}
+                >
+                  ↕ {SORT_LABELS[sortKey]}
+                </button>
+                {showSortMenu && (
+                  <div style={{
+                    position: 'absolute', right: 0, top: 'calc(100% + 4px)',
+                    background: 'var(--surface)', border: '1px solid var(--border)',
+                    borderRadius: '8px', overflow: 'hidden', zIndex: 50,
+                    boxShadow: '0 8px 32px rgba(0,0,0,0.4)', minWidth: '140px',
+                  }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {(Object.keys(SORT_LABELS) as SortKey[]).map(key => (
+                      <button
+                        key={key}
+                        onClick={() => { setSortKey(key); setShowSortMenu(false); }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left',
+                          padding: '9px 14px', background: sortKey === key ? 'var(--surface2)' : 'transparent',
+                          border: 'none', color: sortKey === key ? 'var(--accent2)' : 'var(--text2)',
+                          fontSize: '12px', fontWeight: sortKey === key ? 700 : 400,
+                          cursor: 'pointer', fontFamily: "'Syne', sans-serif",
+                        }}
+                        onMouseEnter={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'var(--surface2)'; }}
+                        onMouseLeave={e => { if (sortKey !== key) (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
+                      >
+                        {SORT_LABELS[key]}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {filtered.length === 0 ? (
             <div style={{
@@ -280,31 +377,35 @@ export default function Dashboard() {
                     )}
                   </div>
 
-                  {/* Delete button */}
-                  <button
-                    onClick={e => { e.stopPropagation(); setDeleteId(doc.id); }}
-                    style={{
-                      position: 'absolute',
-                      top: '12px',
-                      right: '12px',
-                      width: '24px',
-                      height: '24px',
-                      background: 'transparent',
-                      border: '1px solid transparent',
-                      borderRadius: '4px',
-                      color: 'var(--text3)',
-                      cursor: 'pointer',
-                      fontSize: '13px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      opacity: 0,
-                      transition: 'all 0.1s',
-                    }}
-                    className="doc-delete-btn"
-                  >
-                    ✕
-                  </button>
+                  {/* Action buttons (shown on hover) */}
+                  <div className="doc-actions" style={{ position: 'absolute', top: '10px', right: '10px', display: 'flex', gap: '4px', opacity: 0, transition: 'opacity 0.1s' }}>
+                    <button
+                      onClick={e => handleDuplicate(doc, e)}
+                      title="Dupliquer le document"
+                      style={{
+                        width: '24px', height: '24px',
+                        background: 'var(--surface2)', border: '1px solid var(--border)',
+                        borderRadius: '4px', color: 'var(--text3)',
+                        cursor: 'pointer', fontSize: '12px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent2)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(124,106,255,0.4)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; }}
+                    >⧉</button>
+                    <button
+                      onClick={e => { e.stopPropagation(); setDeleteId(doc.id); }}
+                      title="Supprimer le document"
+                      style={{
+                        width: '24px', height: '24px',
+                        background: 'var(--surface2)', border: '1px solid var(--border)',
+                        borderRadius: '4px', color: 'var(--text3)',
+                        cursor: 'pointer', fontSize: '12px',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      }}
+                      onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(235,87,87,0.3)'; }}
+                      onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'; (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; }}
+                    >✕</button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -361,8 +462,7 @@ export default function Dashboard() {
       )}
 
       <style>{`
-        .doc-delete-btn { opacity: 0 !important; }
-        div:hover > .doc-delete-btn { opacity: 1 !important; color: var(--red) !important; border-color: rgba(235,87,87,0.3) !important; }
+        div:hover > .doc-actions { opacity: 1 !important; }
       `}</style>
     </div>
   );

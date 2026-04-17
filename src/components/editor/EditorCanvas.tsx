@@ -85,6 +85,7 @@ interface EditorCanvasProps {
   zoom: number;
   onZoomChange: (z: number) => void;
   mode: EditorMode;
+  focusMode?: boolean;
   editorRef: RefObject<{
     getHTML: () => string;
     setContent: (html: string) => void;
@@ -93,7 +94,7 @@ interface EditorCanvasProps {
   } | null>;
 }
 
-export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mode, editorRef }: EditorCanvasProps) {
+export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mode, focusMode, editorRef }: EditorCanvasProps) {
   const isInitialized = useRef(false);
   const [pageCount, setPageCount] = useState(1);
   const [selectedImage, setSelectedImage] = useState<{ src: string; element: HTMLImageElement } | null>(null);
