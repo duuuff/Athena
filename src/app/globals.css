@@ -301,6 +301,22 @@ html, body {
   white-space: nowrap;
 }
 
+/* ── Canvas dark mode ────────────────────────────────── */
+.canvas-dark .ProseMirror { color: #d8d8e8; caret-color: #c8b4f0; }
+.canvas-dark .ProseMirror p { color: #d8d8e8; }
+.canvas-dark .ProseMirror h1 { color: #e8e8f8; }
+.canvas-dark .ProseMirror h2 { color: #d0d0e8; border-bottom-color: #3a3a50; }
+.canvas-dark .ProseMirror h3 { color: #c0c0d8; }
+.canvas-dark .ProseMirror h4 { color: #b0b0c8; }
+.canvas-dark .ProseMirror li { color: #d8d8e8; }
+.canvas-dark .ProseMirror blockquote { background: #1a1a2e; border-left-color: #4a4a70; color: #a0a0c0; }
+.canvas-dark .ProseMirror code { background: #1a1a2e; color: #c8b4f0; }
+.canvas-dark .ProseMirror hr { border-top-color: #3a3a50; }
+.canvas-dark .ProseMirror th { background: #1e1e30; color: #d0d0e8; }
+.canvas-dark .ProseMirror td, .canvas-dark .ProseMirror th { border-color: #3a3a50; color: #d0d0e8; }
+.canvas-dark .ProseMirror code.equation { background: #1a1a2e; border-color: #3a3a60; color: #a0a0e0; }
+.canvas-dark .ProseMirror p.is-editor-empty:first-child::before { color: #555570; }
+
 /* ── Print / PDF export ───────────────────────────────── */
 @media print {
   @page { size: A4; margin: 0; }

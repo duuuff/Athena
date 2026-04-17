@@ -86,6 +86,7 @@ interface EditorCanvasProps {
   onZoomChange: (z: number) => void;
   mode: EditorMode;
   focusMode?: boolean;
+  canvasDark?: boolean;
   editorRef: RefObject<{
     getHTML: () => string;
     setContent: (html: string) => void;
@@ -94,7 +95,7 @@ interface EditorCanvasProps {
   } | null>;
 }
 
-export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mode, focusMode, editorRef }: EditorCanvasProps) {
+export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mode, focusMode, canvasDark, editorRef }: EditorCanvasProps) {
   const isInitialized = useRef(false);
   const [pageCount, setPageCount] = useState(1);
   const [selectedImage, setSelectedImage] = useState<{ src: string; element: HTMLImageElement } | null>(null);
@@ -268,7 +269,7 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
 
   return (
     <div
-      style={{ flex: 1, overflowY: 'auto', background: '#e8e7e3', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px 80px', position: 'relative' }}
+      style={{ flex: 1, overflowY: 'auto', background: canvasDark ? '#111115' : '#e8e7e3', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 24px 80px', position: 'relative' }}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -284,8 +285,8 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
               position: 'absolute', left: 0, right: 0,
               top: i * (PAGE_H + PAGE_GAP),
               height: PAGE_H,
-              background: 'var(--doc-bg)',
-              boxShadow: '0 4px 32px rgba(0,0,0,0.3)',
+              background: canvasDark ? '#1e1e2e' : 'var(--doc-bg)',
+              boxShadow: canvasDark ? '0 4px 32px rgba(0,0,0,0.6)' : '0 4px 32px rgba(0,0,0,0.3)',
               borderRadius: '2px',
               zIndex: 0,
             }}>
@@ -303,7 +304,7 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
               left: -60, right: -60,
               top: (i + 1) * PAGE_H + i * PAGE_GAP,
               height: PAGE_GAP,
-              background: '#e8e7e3',
+              background: canvasDark ? '#111115' : '#e8e7e3',
               zIndex: 20,
               pointerEvents: 'none',
             }} />
@@ -311,7 +312,7 @@ export default function EditorCanvas({ content, onChange, zoom, onZoomChange, mo
 
           {/* Content — spans all pages (z-index 10) */}
           <div
-            className="doc-print-area"
+            className={`doc-print-area${canvasDark ? ' canvas-dark' : ''}`}
             style={{
               position: 'absolute',
               left: PAD_H, right: PAD_H,
