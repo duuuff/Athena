@@ -2,22 +2,22 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #0f0f11;
-  --surface: #16161a;
-  --surface2: #1e1e24;
-  --surface3: #26262e;
-  --border: #2e2e38;
-  --accent: #c8b4f0;
-  --accent2: #7c6aff;
-  --accent3: #f0d090;
-  --text: #e8e8f0;
-  --text2: #9090a8;
-  --text3: #5a5a72;
+  --bg: #f2efe9;
+  --surface: #fdfcfa;
+  --surface2: #eeebe4;
+  --surface3: #e4dfd7;
+  --border: #d6d0c8;
+  --accent: #8b7ec8;
+  --accent2: #6b5fcc;
+  --accent3: #b8892a;
+  --text: #1c1916;
+  --text2: #7a7068;
+  --text3: #a89f94;
   --doc-bg: #faf9f7;
   --doc-border: #e0ddd8;
-  --green: #6fcf97;
-  --red: #eb5757;
-  --orange: #f2994a;
+  --green: #3a8c5c;
+  --red: #c44040;
+  --orange: #c87030;
   --sidebar-w: 44px;
 }
 
@@ -151,8 +151,8 @@ html, body {
 }
 
 .ProseMirror pre {
-  background: #1e1e24;
-  color: #e8e8f0;
+  background: #2a2620;
+  color: #e8e4dc;
   font-family: 'DM Mono', monospace;
   font-size: 12px;
   padding: 16px;

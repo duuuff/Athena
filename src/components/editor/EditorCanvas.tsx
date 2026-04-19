@@ -349,7 +349,7 @@ function NormalView({
 
   return (
     <div
-      style={{ flex: 1, overflowY: 'auto', background: canvasDark ? '#111115' : '#dddcda', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px 100px', position: 'relative' }}
+      style={{ flex: 1, overflowY: 'auto', background: canvasDark ? '#111115' : '#e5e1db', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 24px 100px', position: 'relative' }}
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
@@ -516,7 +516,7 @@ function GridView({ pages, activeIdx, canvasDark, onPageClick, onAddPage, onClos
   const [hoverInsert, setHoverInsert] = useState<number | null>(null);
 
   return (
-    <div style={{ flex: 1, overflowY: 'auto', background: canvasDark ? '#0b0b10' : '#c8c7c4', padding: '32px 32px 100px' }}>
+    <div style={{ flex: 1, overflowY: 'auto', background: canvasDark ? '#0b0b10' : '#d8d3cc', padding: '32px 32px 100px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 28 }}>
         <span style={{ fontFamily: "'Syne', sans-serif", fontSize: '13px', fontWeight: 700, color: 'var(--text2)', letterSpacing: '-0.2px' }}>
           {pages.length} page{pages.length > 1 ? 's' : ''}
