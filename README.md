@@ -275,11 +275,55 @@ src/
 
 ---
 
+---
+
+## Améliorations implémentées (Session 5 — 2026-04-19)
+
+### 1. Panel "Notes rapides" (scratchpad)
+- Nouveau panel `notes` dans la sidebar gauche (icône ✏ — 5ème bouton)
+- Zone de texte libre attachée au document, séparée du contenu principal
+- Sauvegarde debounced (800ms) en localStorage : clé `scripta_notes_<docId>`
+- Compteur ligne/caractères en pied du panel + bouton "Effacer"
+- `getNotes / saveNotes` ajoutées dans `storage.ts`
+- `'notes'` ajouté au type `PanelId` dans `types.ts`
+
+### 2. TOC : Navigation par clic (scroll-to-heading)
+- Clic sur un titre dans le panel TOC → scroll fluide (`scrollIntoView`) vers ce titre dans l'éditeur
+- Callback `onScrollToHeading(index)` descendu depuis `EditorPage` via `SidebarPanel` → `TOCPanel`
+- Highlight temporaire (fond violet + bordure gauche) 1,5 s sur l'entrée cliquée
+- Implémentation : `document.querySelector('.ProseMirror').querySelectorAll('h1,h2,h3,h4')[index]`
+
+### 3. Import Markdown
+- Bouton `↑ MD` dans la TopBar (symétrique au `↓ MD` existant)
+- `<input type="file" accept=".md,.txt">` caché dans le DOM, déclenché par le bouton
+- Nouveau fichier `src/lib/markdownToHtml.ts` : parseur Markdown → HTML
+  - Blocs : titres H1–H4, listes ol/ul, blockquotes, code fences, règles horizontales, paragraphes
+  - Inline : gras `**`, italique `*`, strikethrough `~~`, `code`, liens, images
+- Contenu importé injecté directement dans TipTap via `editorRef.current?.setContent(html)` + `handleContentChange`
+
+### 4. AI Panel — Intégration Anthropic (Phase 3)
+- Route API : `src/app/api/ai/route.ts` (POST) — appel fetch direct vers `https://api.anthropic.com/v1/messages`
+- Modèle : `claude-haiku-4-5-20251001` (rapide, faible latence)
+- Clé API : variable d'env `ANTHROPIC_API_KEY` dans `.env.local`
+- System prompt contextuel : les 4 000 premiers caractères du document HTML inclus
+- Suggestions rapides prédéfinies (Reformuler / Générer transition / Corriger grammaire / Résumer) → cliquables
+- Historique de conversation avec scroll automatique, bulles utilisateur (gris) / IA (violet)
+- Gestion gracieuse si ANTHROPIC_API_KEY est absent : message informatif dans le panel
+- Raccourci Entrée pour envoyer (Shift+Entrée pour nouvelle ligne)
+
+### 5. Objectif de rédaction (word goal)
+- Nouveau champ `wordGoal?: number` dans l'interface `Document`
+- Bouton `⊙` dans la TopBar → popover inline (input numérique) pour saisir/modifier/supprimer l'objectif
+- Barre de progression horizontale (3px, violette → verte à 100%) sous le compteur de mots
+- Affichage : `1 234 / 2 000 mots · 62%` quand objectif actif (vs `N mots · ~X min` sans objectif)
+- Persisté immédiatement via `saveDocument` dans le document localStorage
+
+---
+
 ## Roadmap (non implémenté)
 
-- **Phase 3** : Intégration API Anthropic (panel IA fonctionnel : reformulation, génération, correction)
 - **Phase 4** : Backend (base de données, authentification, collaboration temps-réel)
 - **Export** : .docx, LaTeX compilable
 - **Dossiers / espaces de travail** sur le dashboard (groupement de documents)
-- **Import** : fichier .md, .docx, .tex
+- **Import** : .docx, .tex
 - **Collaboration** : commentaires, suggestions de révision, multi-curseur

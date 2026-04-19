@@ -3,6 +3,7 @@ import { Document, DocumentVersion, DocStats, Reference } from './types';
 const DOCUMENTS_KEY = 'scripta_documents';
 const VERSIONS_KEY = 'scripta_versions';
 const REFS_PREFIX = 'scripta_refs_';
+const NOTES_PREFIX = 'scripta_notes_';
 const MAX_VERSIONS_PER_DOC = 20;
 
 export function getDocuments(): Document[] {
@@ -84,6 +85,17 @@ export function getReferences(documentId: string): Reference[] {
 
 export function saveReferences(documentId: string, refs: Reference[]): void {
   localStorage.setItem(REFS_PREFIX + documentId, JSON.stringify(refs));
+}
+
+// ===== NOTES =====
+
+export function getNotes(documentId: string): string {
+  if (typeof window === 'undefined') return '';
+  return localStorage.getItem(NOTES_PREFIX + documentId) ?? '';
+}
+
+export function saveNotes(documentId: string, notes: string): void {
+  localStorage.setItem(NOTES_PREFIX + documentId, notes);
 }
 
 export function countWords(html: string): number {

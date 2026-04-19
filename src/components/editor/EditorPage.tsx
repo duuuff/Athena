@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { getDocument, saveDocument, saveVersion, getVersions, countWords, computeStats } from '@/lib/storage';
 import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId, DocStats } from '@/lib/types';
 import { htmlToMarkdown } from '@/lib/htmlToMarkdown';
+import { markdownToHtml } from '@/lib/markdownToHtml';
 import EditorToolbar from './EditorToolbar';
 import EditorCanvas from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
@@ -40,6 +41,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     if (typeof window !== 'undefined') return localStorage.getItem('scripta_canvas_dark') === 'true';
     return false;
   });
+  const [wordGoal, setWordGoalState] = useState<number | undefined>(undefined);
+  const importInputRef = useRef<HTMLInputElement | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const editorRef = useRef<{ getHTML: () => string; setContent: (html: string) => void; editor?: Editor | null } | null>(null);
 
@@ -50,6 +53,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     setTitle(loaded.title);
     setContent(loaded.content);
     setLiveWordCount(loaded.wordCount);
+    setWordGoalState(loaded.wordGoal);
   }, [documentId, router]);
 
   // Keyboard shortcuts
@@ -71,7 +75,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     return () => window.removeEventListener('keydown', handleKey);
   }, [focusMode]);
 
-  const triggerSave = useCallback((newContent: string, newTitle: string) => {
+  const triggerSave = useCallback((newContent: string, newTitle: string, goal?: number | undefined) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     setSaveStatus('unsaved');
     saveTimer.current = setTimeout(() => {
@@ -86,6 +90,7 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         wordCount: wc,
         tags: doc?.tags,
         pinned: doc?.pinned,
+        wordGoal: goal !== undefined ? goal : doc?.wordGoal,
       };
       saveDocument(updated);
       setDoc(updated);
@@ -136,6 +141,50 @@ export default function EditorPage({ documentId }: EditorPageProps) {
     editorRef.current?.editor?.commands.insertContent(text);
   }, []);
 
+  const handleScrollToHeading = useCallback((index: number) => {
+    const proseMirror = document.querySelector('.ProseMirror');
+    if (!proseMirror) return;
+    const headings = proseMirror.querySelectorAll('h1, h2, h3, h4');
+    const target = headings[index] as HTMLElement | undefined;
+    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, []);
+
+  const handleImportMarkdown = useCallback(() => {
+    importInputRef.current?.click();
+  }, []);
+
+  const handleImportFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const md = ev.target?.result as string;
+      const html = markdownToHtml(md);
+      editorRef.current?.setContent(html);
+      handleContentChange(html);
+    };
+    reader.readAsText(file, 'utf-8');
+    e.target.value = '';
+  }, [handleContentChange]);
+
+  const handleSetWordGoal = useCallback((goal: number | undefined) => {
+    setWordGoalState(goal);
+    const wc = countWords(content);
+    const updated: Document = {
+      id: documentId,
+      title,
+      content,
+      createdAt: doc?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      wordCount: wc,
+      tags: doc?.tags,
+      pinned: doc?.pinned,
+      wordGoal: goal,
+    };
+    saveDocument(updated);
+    setDoc(updated);
+  }, [documentId, title, content, doc]);
+
   function toggleCanvasDark() {
     setCanvasDark(prev => {
       const next = !prev;
@@ -179,11 +228,20 @@ export default function EditorPage({ documentId }: EditorPageProps) {
 
   return (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg)', overflow: 'hidden', fontFamily: "'Syne', sans-serif" }}>
+      <input
+        ref={importInputRef}
+        type="file"
+        accept=".md,.txt"
+        style={{ display: 'none' }}
+        onChange={handleImportFile}
+      />
       <TopBar
         title={title}
         saveStatus={saveStatus}
         mode={mode}
         focusMode={focusMode}
+        wordCount={liveWordCount}
+        wordGoal={wordGoal}
         onTitleChange={handleTitleChange}
         onModeChange={handleModeChange}
         onBack={() => router.push('/')}
@@ -197,6 +255,8 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         onShowStats={() => setShowStats(true)}
         canvasDark={canvasDark}
         onToggleCanvasDark={toggleCanvasDark}
+        onImportMarkdown={handleImportMarkdown}
+        onSetWordGoal={handleSetWordGoal}
         onExportPDF={() => {
           const html = editorRef.current?.getHTML() ?? '';
           const docHTML = `<!DOCTYPE html><html><head><meta charset="utf-8">
@@ -247,7 +307,6 @@ export default function EditorPage({ documentId }: EditorPageProps) {
         onExportMarkdown={handleExportMarkdown}
         versionLabel={versionLabel}
         onVersionLabelChange={setVersionLabel}
-        wordCount={liveWordCount}
       />
 
       {!focusMode && <EditorToolbar editorRef={editorRef} />}
@@ -277,13 +336,14 @@ export default function EditorPage({ documentId }: EditorPageProps) {
             <SidebarPanel
               panelId={activePanel}
               activePanel={activePanel}
-              title={activePanel === 'ai' ? 'ScriptaAI' : activePanel === 'latex' ? 'LaTeX Source' : activePanel === 'toc' ? 'Plan du document' : 'Bibliographie'}
-              icon={activePanel === 'ai' ? '✦' : activePanel === 'latex' ? '{}' : activePanel === 'toc' ? '☰' : '①'}
-              accentColor={activePanel === 'ai' ? 'var(--accent2)' : activePanel === 'latex' ? 'var(--accent3)' : 'var(--accent)'}
+              title={activePanel === 'ai' ? 'ScriptaAI' : activePanel === 'latex' ? 'LaTeX Source' : activePanel === 'toc' ? 'Plan du document' : activePanel === 'notes' ? 'Notes rapides' : 'Bibliographie'}
+              icon={activePanel === 'ai' ? '✦' : activePanel === 'latex' ? '{}' : activePanel === 'toc' ? '☰' : activePanel === 'notes' ? '✏' : '①'}
+              accentColor={activePanel === 'ai' ? 'var(--accent2)' : activePanel === 'latex' ? 'var(--accent3)' : activePanel === 'notes' ? 'var(--accent3)' : 'var(--accent)'}
               latexContent={content}
               content={content}
               documentId={documentId}
               onInsertCitation={handleInsertCitation}
+              onScrollToHeading={handleScrollToHeading}
               onClose={() => setActivePanel(null)}
               inline
             />
@@ -331,6 +391,8 @@ interface TopBarProps {
   focusMode: boolean;
   versionLabel: string;
   canvasDark: boolean;
+  wordCount: number;
+  wordGoal?: number;
   onVersionLabelChange: (v: string) => void;
   onTitleChange: (t: string) => void;
   onModeChange: (m: EditorMode) => void;
@@ -339,13 +401,16 @@ interface TopBarProps {
   onShowVersions: () => void;
   onExportPDF: () => void;
   onExportMarkdown: () => void;
+  onImportMarkdown: () => void;
   onToggleFocus: () => void;
   onToggleCanvasDark: () => void;
   onShowStats: () => void;
-  wordCount: number;
+  onSetWordGoal: (goal: number | undefined) => void;
 }
 
-function TopBar({ title, saveStatus, mode, focusMode, versionLabel, canvasDark, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, onToggleFocus, onToggleCanvasDark, onShowStats, wordCount }: TopBarProps) {
+function TopBar({ title, saveStatus, mode, focusMode, versionLabel, canvasDark, onVersionLabelChange, onTitleChange, onModeChange, onBack, onSaveVersion, onShowVersions, onExportPDF, onExportMarkdown, onImportMarkdown, onToggleFocus, onToggleCanvasDark, onShowStats, onSetWordGoal, wordCount, wordGoal }: TopBarProps) {
+  const [showGoalInput, setShowGoalInput] = useState(false);
+  const [goalDraft, setGoalDraft] = useState(String(wordGoal ?? ''));
   const statusConfig = {
     saved: { color: 'var(--green)', label: 'Enregistré', pulse: true },
     saving: { color: 'var(--accent3)', label: 'Enregistrement…', pulse: false },
@@ -384,7 +449,18 @@ function TopBar({ title, saveStatus, mode, focusMode, versionLabel, canvasDark, 
         <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: statusConfig.color, display: 'inline-block', animation: statusConfig.pulse ? 'pulse 2s infinite' : 'none' }} />
         {statusConfig.label}
       </div>
-      {wordCount > 0 && <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap', flexShrink: 0 }}>{wordCount} mots · ~{Math.ceil(wordCount / 200)} min</span>}
+      {wordCount > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', flexShrink: 0 }}>
+          <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", whiteSpace: 'nowrap' }}>
+            {wordGoal ? `${wordCount} / ${wordGoal} mots · ${Math.min(100, Math.round(wordCount / wordGoal * 100))}%` : `${wordCount} mots · ~${Math.ceil(wordCount / 200)} min`}
+          </span>
+          {wordGoal && (
+            <div style={{ width: '120px', height: '3px', background: 'var(--surface3)', borderRadius: '2px', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${Math.min(100, wordCount / wordGoal * 100)}%`, background: wordCount >= wordGoal ? 'var(--green)' : 'var(--accent2)', borderRadius: '2px', transition: 'width 0.5s ease' }} />
+            </div>
+          )}
+        </div>
+      )}
       <div style={{ flex: 1 }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '6px', overflow: 'hidden' }}>
@@ -407,8 +483,34 @@ function TopBar({ title, saveStatus, mode, focusMode, versionLabel, canvasDark, 
         />
         <button onClick={onSaveVersion} title="Sauvegarder une version (Enter)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>💾</button>
         <button onClick={onShowVersions} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>Historique</button>
+        <button onClick={onImportMarkdown} title="Importer un fichier Markdown (.md)" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>↑ MD</button>
         <button onClick={onExportMarkdown} title="Télécharger en Markdown" style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--text2)', cursor: 'pointer' }}>↓ MD</button>
         <button onClick={onExportPDF} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 14px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>↓ PDF</button>
+        {showGoalInput ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <input
+              autoFocus
+              type="number"
+              min="1"
+              value={goalDraft}
+              onChange={e => setGoalDraft(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  const n = parseInt(goalDraft);
+                  onSetWordGoal(isNaN(n) || n <= 0 ? undefined : n);
+                  setShowGoalInput(false);
+                }
+                if (e.key === 'Escape') setShowGoalInput(false);
+              }}
+              placeholder="Objectif…"
+              style={{ width: '90px', fontFamily: "'Syne', sans-serif", fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--accent2)', background: 'var(--surface2)', color: 'var(--text)', outline: 'none' }}
+            />
+            <button onClick={() => { const n = parseInt(goalDraft); onSetWordGoal(isNaN(n) || n <= 0 ? undefined : n); setShowGoalInput(false); }} style={{ fontFamily: "'Syne', sans-serif", fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: 'none', background: 'var(--accent2)', color: 'white', cursor: 'pointer' }}>✓</button>
+            {wordGoal && <button onClick={() => { onSetWordGoal(undefined); setShowGoalInput(false); }} style={{ fontFamily: "'Syne', sans-serif", fontSize: '11px', padding: '4px 8px', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface2)', color: 'var(--red)', cursor: 'pointer' }}>✕</button>}
+          </div>
+        ) : (
+          <button onClick={() => { setGoalDraft(String(wordGoal ?? '')); setShowGoalInput(true); }} title={wordGoal ? `Objectif : ${wordGoal} mots` : 'Définir un objectif de mots'} style={{ fontFamily: "'Syne', sans-serif", fontSize: '12px', fontWeight: 600, padding: '5px 10px', borderRadius: '6px', border: '1px solid var(--border)', background: wordGoal ? 'rgba(124,106,255,0.12)' : 'var(--surface2)', color: wordGoal ? 'var(--accent2)' : 'var(--text2)', cursor: 'pointer' }}>⊙</button>
+        )}
         <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent2), var(--accent))', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '11px', fontWeight: 700, color: 'white', cursor: 'pointer', flexShrink: 0 }}>ML</div>
       </div>
     </div>
@@ -427,6 +529,7 @@ function LeftSidebar({ activePanel, onTogglePanel }: LeftSidebarProps) {
     { id: 'latex', icon: '{}', tip: 'Code LaTeX' },
     { id: 'toc', icon: '☰', tip: 'Plan' },
     { id: 'refs', icon: '①', tip: 'Bibliographie' },
+    { id: 'notes', icon: '✏', tip: 'Notes rapides' },
   ];
 
   return (

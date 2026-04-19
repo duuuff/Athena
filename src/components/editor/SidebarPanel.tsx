@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { PanelId, Reference } from '@/lib/types';
-import { getReferences, saveReferences } from '@/lib/storage';
+import { getReferences, saveReferences, getNotes, saveNotes } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
 
 interface SidebarPanelProps {
@@ -15,6 +15,7 @@ interface SidebarPanelProps {
   content?: string;
   documentId?: string;
   onInsertCitation?: (text: string) => void;
+  onScrollToHeading?: (index: number) => void;
   onClose?: () => void;
   inline?: boolean;
 }
@@ -29,6 +30,7 @@ export default function SidebarPanel({
   content,
   documentId,
   onInsertCitation,
+  onScrollToHeading,
   onClose,
   inline,
 }: SidebarPanelProps) {
@@ -36,9 +38,9 @@ export default function SidebarPanel({
 
   const panelContent = (
     <>
-      {panelId === 'ai' && <AIPanel onClose={onClose} />}
+      {panelId === 'ai' && <AIPanel content={content ?? ''} onClose={onClose} />}
       {panelId === 'latex' && <LaTeXPanel content={latexContent ?? ''} onClose={onClose} />}
-      {panelId === 'toc' && <TOCPanel content={content ?? ''} onClose={onClose} />}
+      {panelId === 'toc' && <TOCPanel content={content ?? ''} onScrollToHeading={onScrollToHeading} onClose={onClose} />}
       {panelId === 'refs' && (
         <RefsPanel
           documentId={documentId ?? ''}
@@ -46,6 +48,7 @@ export default function SidebarPanel({
           onClose={onClose}
         />
       )}
+      {panelId === 'notes' && <NotesPanel documentId={documentId ?? ''} onClose={onClose} />}
     </>
   );
 
@@ -80,40 +83,91 @@ export default function SidebarPanel({
 }
 
 // ===== AI PANEL =====
-function AIPanel({ onClose }: { onClose?: () => void }) {
+interface AIMessage { role: 'ai' | 'user'; text: string }
+
+const SUGGESTIONS = [
+  'Reformuler l\'introduction pour la rendre plus percutante',
+  'Générer une transition vers la section suivante',
+  'Corriger la grammaire et le style de ce document',
+  'Résumer le document en 3 points clés',
+];
+
+function AIPanel({ content, onClose }: { content: string; onClose?: () => void }) {
+  const [messages, setMessages] = useState<AIMessage[]>([
+    { role: 'ai', text: 'Bonjour\u00a0! J\'analyse votre document. Que souhaitez-vous améliorer\u00a0?' },
+  ]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = useCallback(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, []);
+
+  async function sendMessage(prompt: string) {
+    if (!prompt.trim() || loading) return;
+    const userMsg: AIMessage = { role: 'user', text: prompt };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setLoading(true);
+    setTimeout(scrollToBottom, 50);
+
+    try {
+      const res = await fetch('/api/ai', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, context: content }),
+      });
+      const data = await res.json();
+      const reply = data.reply ?? data.error ?? 'Erreur inconnue';
+      setMessages(prev => [...prev, { role: 'ai', text: reply }]);
+    } catch {
+      setMessages(prev => [...prev, { role: 'ai', text: 'Impossible de joindre l\'IA. Vérifiez votre connexion.' }]);
+    } finally {
+      setLoading(false);
+      setTimeout(scrollToBottom, 50);
+    }
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <PanelHeader title="ScriptaAI" icon="✦" accentColor="var(--accent2)" onClose={onClose} />
       <div style={{ flex: 1, overflowY: 'auto', padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div style={msgStyle('ai')}>
-          <strong style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>ScriptaAI</strong>
-          Bonjour ! J'ai analysé votre document. Que souhaitez-vous améliorer ?
-        </div>
-        <SuggestionBtn>Reformuler l'introduction pour la rendre plus percutante</SuggestionBtn>
-        <SuggestionBtn>Générer la transition vers la section suivante</SuggestionBtn>
-        <SuggestionBtn>Corriger la grammaire de ce paragraphe</SuggestionBtn>
+        {messages.map((m, i) => (
+          <div key={i} style={{ ...msgStyle(m.role), whiteSpace: 'pre-wrap' }}>
+            {m.role === 'ai' && <strong style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>ScriptaAI</strong>}
+            {m.text}
+          </div>
+        ))}
+        {loading && (
+          <div style={msgStyle('ai')}>
+            <strong style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.5px', textTransform: 'uppercase', color: 'var(--accent)', display: 'block', marginBottom: '4px' }}>ScriptaAI</strong>
+            <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '11px', color: 'var(--text3)', animation: 'pulse 1s infinite' }}>Réflexion en cours…</span>
+          </div>
+        )}
+        {messages.length === 1 && !loading && SUGGESTIONS.map((s, i) => (
+          <SuggestionBtn key={i} onClick={() => sendMessage(s)}>{s}</SuggestionBtn>
+        ))}
+        <div ref={messagesEndRef} />
       </div>
       <div style={{ padding: '10px', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', background: 'var(--surface2)', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
           <textarea
             rows={2}
-            placeholder="Demandez à l'IA…"
-            style={{
-              flex: 1,
-              background: 'transparent',
-              border: 'none',
-              outline: 'none',
-              padding: '8px 10px',
-              fontFamily: "'Syne', sans-serif",
-              fontSize: '12px',
-              color: 'var(--text)',
-              resize: 'none',
-            }}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); } }}
+            placeholder="Demandez à l'IA… (Entrée pour envoyer)"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', padding: '8px 10px', fontFamily: "'Syne', sans-serif", fontSize: '12px', color: 'var(--text)', resize: 'none' }}
           />
-          <button style={{ width: '34px', background: 'var(--accent2)', border: 'none', color: 'white', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>↑</button>
+          <button
+            onClick={() => sendMessage(input)}
+            disabled={loading || !input.trim()}
+            style={{ width: '34px', background: loading ? 'var(--surface3)' : 'var(--accent2)', border: 'none', color: 'white', cursor: loading ? 'default' : 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+          >↑</button>
         </div>
         <p style={{ fontSize: '10px', color: 'var(--text3)', marginTop: '6px', fontFamily: "'DM Mono', monospace" }}>
-          IA non connectée en Phase 1 — intégration Anthropic en Phase 3
+          claude-haiku-4-5 · Contexte\u00a0: document courant
         </p>
       </div>
     </div>
@@ -191,7 +245,8 @@ function stripTags(html: string) {
 }
 
 // ===== TOC PANEL =====
-function TOCPanel({ content, onClose }: { content: string; onClose?: () => void }) {
+function TOCPanel({ content, onScrollToHeading, onClose }: { content: string; onScrollToHeading?: (index: number) => void; onClose?: () => void }) {
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const headings: Array<{ level: number; text: string; id: number }> = [];
   let counter = 0;
   const regex = /<h([1-4])[^>]*>(.*?)<\/h[1-4]>/gi;
@@ -202,6 +257,12 @@ function TOCPanel({ content, onClose }: { content: string; onClose?: () => void 
       text: stripTags(match[2]),
       id: counter++,
     });
+  }
+
+  function handleHeadingClick(index: number) {
+    setActiveIdx(index);
+    onScrollToHeading?.(index);
+    setTimeout(() => setActiveIdx(null), 1500);
   }
 
   const levelStyles: Record<number, React.CSSProperties> = {
@@ -223,19 +284,22 @@ function TOCPanel({ content, onClose }: { content: string; onClose?: () => void 
           headings.map((h) => (
             <div
               key={h.id}
+              onClick={() => handleHeadingClick(h.id)}
               style={{
                 display: 'flex',
                 alignItems: 'center',
                 gap: '8px',
                 padding: '7px 16px',
                 cursor: 'pointer',
-                transition: 'background 0.1s',
+                transition: 'background 0.15s',
+                background: activeIdx === h.id ? 'rgba(124,106,255,0.12)' : 'transparent',
+                borderLeft: activeIdx === h.id ? '2px solid var(--accent2)' : '2px solid transparent',
                 ...levelStyles[h.level],
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--surface2)'}
-              onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}
+              onMouseEnter={e => { if (activeIdx !== h.id) (e.currentTarget as HTMLDivElement).style.background = 'var(--surface2)'; }}
+              onMouseLeave={e => { if (activeIdx !== h.id) (e.currentTarget as HTMLDivElement).style.background = 'transparent'; }}
             >
-              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: 'var(--text3)', minWidth: '18px', flexShrink: 0 }}>
+              <span style={{ fontFamily: "'DM Mono', monospace", fontSize: '10px', color: activeIdx === h.id ? 'var(--accent2)' : 'var(--text3)', minWidth: '18px', flexShrink: 0 }}>
                 {'H' + h.level}
               </span>
               <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{h.text}</span>
@@ -552,19 +616,21 @@ function msgStyle(type: 'ai' | 'user'): React.CSSProperties {
   };
 }
 
-function SuggestionBtn({ children }: { children: React.ReactNode }) {
+function SuggestionBtn({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) {
   return (
-    <div style={{
-      background: 'var(--surface2)',
-      border: '1px solid var(--border)',
-      borderRadius: '6px',
-      padding: '8px 10px',
-      fontSize: '11px',
-      fontFamily: "'Syne', sans-serif",
-      color: 'var(--text2)',
-      cursor: 'pointer',
-      transition: 'all 0.15s',
-    }}
+    <div
+      onClick={onClick}
+      style={{
+        background: 'var(--surface2)',
+        border: '1px solid var(--border)',
+        borderRadius: '6px',
+        padding: '8px 10px',
+        fontSize: '11px',
+        fontFamily: "'Syne', sans-serif",
+        color: 'var(--text2)',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+      }}
       onMouseEnter={e => {
         (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--accent2)';
         (e.currentTarget as HTMLDivElement).style.color = 'var(--text)';
@@ -579,3 +645,68 @@ function SuggestionBtn({ children }: { children: React.ReactNode }) {
     </div>
   );
 }
+
+// ===== NOTES PANEL =====
+function NotesPanel({ documentId, onClose }: { documentId: string; onClose?: () => void }) {
+  const [notes, setNotes] = useState<string>(() => documentId ? getNotes(documentId) : '');
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleChange(value: string) {
+    setNotes(value);
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      if (documentId) saveNotes(documentId, value);
+    }, 800);
+  }
+
+  const charCount = notes.length;
+  const lineCount = notes ? notes.split('\n').length : 0;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <PanelHeader title="Notes rapides" icon="✏" accentColor="var(--accent3)" onClose={onClose} />
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '12px', gap: '8px' }}>
+        <p style={{ fontSize: '11px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace", margin: 0 }}>
+          Bloc-notes privé attaché à ce document.
+        </p>
+        <textarea
+          value={notes}
+          onChange={e => handleChange(e.target.value)}
+          placeholder="Idées, reminders, brouillons…"
+          style={{
+            flex: 1,
+            background: 'var(--surface2)',
+            border: '1px solid var(--border)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            fontFamily: "'Syne', sans-serif",
+            fontSize: '12px',
+            lineHeight: 1.7,
+            color: 'var(--text)',
+            resize: 'none',
+            outline: 'none',
+            transition: 'border-color 0.15s',
+          }}
+          onFocus={e => (e.currentTarget as HTMLTextAreaElement).style.borderColor = 'var(--accent3)'}
+          onBlur={e => (e.currentTarget as HTMLTextAreaElement).style.borderColor = 'var(--border)'}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '10px', color: 'var(--text3)', fontFamily: "'DM Mono', monospace" }}>
+            {lineCount} ligne{lineCount > 1 ? 's' : ''} · {charCount} caractère{charCount > 1 ? 's' : ''}
+          </span>
+          {notes && (
+            <button
+              onClick={() => handleChange('')}
+              style={{ fontSize: '10px', color: 'var(--text3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: "'Syne', sans-serif", padding: '2px 6px' }}
+              onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--red)'}
+              onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = 'var(--text3)'}
+            >
+              Effacer
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+

@@ -7,6 +7,7 @@ export interface Document {
   wordCount: number;
   tags?: string[];
   pinned?: boolean;
+  wordGoal?: number;
 }
 
 export interface DocumentVersion {
@@ -32,7 +33,7 @@ export type SaveStatus = 'saved' | 'saving' | 'unsaved' | 'error';
 
 export type EditorMode = 'visual' | 'split' | 'latex';
 
-export type PanelId = 'ai' | 'org' | 'latex' | 'toc' | 'refs' | null;
+export type PanelId = 'ai' | 'org' | 'latex' | 'toc' | 'refs' | 'notes' | null;
 
 export interface DocStats {
   words: number;
