@@ -98,19 +98,28 @@ export function saveNotes(documentId: string, notes: string): void {
   localStorage.setItem(NOTES_PREFIX + documentId, notes);
 }
 
+function flattenHtml(html: string): string {
+  try {
+    const pages = JSON.parse(html);
+    if (Array.isArray(pages)) return pages.join(' ');
+  } catch {}
+  return html;
+}
+
 export function countWords(html: string): number {
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const text = flattenHtml(html).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   if (!text) return 0;
   return text.split(' ').filter(Boolean).length;
 }
 
 export function computeStats(html: string): DocStats {
-  const text = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+  const flat = flattenHtml(html);
+  const text = flat.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
   const words = text ? text.split(' ').filter(Boolean).length : 0;
   const chars = text.length;
   const charsNoSpaces = text.replace(/\s/g, '').length;
-  const paragraphs = (html.match(/<p[^>]*>/gi) ?? []).length;
-  const headings = (html.match(/<h[1-4][^>]*>/gi) ?? []).length;
+  const paragraphs = (flat.match(/<p[^>]*>/gi) ?? []).length;
+  const headings = (flat.match(/<h[1-4][^>]*>/gi) ?? []).length;
   const readingMinutes = Math.max(1, Math.round(words / 200));
   return { words, chars, charsNoSpaces, paragraphs, headings, readingMinutes };
 }

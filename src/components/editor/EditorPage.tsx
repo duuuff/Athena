@@ -7,7 +7,7 @@ import { Document, DocumentVersion, SaveStatus, EditorMode, PanelId, DocStats } 
 import { htmlToMarkdown } from '@/lib/htmlToMarkdown';
 import { markdownToHtml } from '@/lib/markdownToHtml';
 import EditorToolbar from './EditorToolbar';
-import EditorCanvas from './EditorCanvas';
+import EditorCanvas, { parsePages, serializePages } from './EditorCanvas';
 import SidebarPanel from './SidebarPanel';
 import VersionHistoryModal from './VersionHistoryModal';
 import FindReplaceBar from './FindReplaceBar';
@@ -207,13 +207,14 @@ export default function EditorPage({ documentId }: EditorPageProps) {
   }
 
   function handleReplace(search: string, replacement: string, replaceAll: boolean) {
-    const html = editorRef.current?.getHTML() ?? '';
     if (!search) return;
     const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(escaped, replaceAll ? 'gi' : 'i');
-    const newHtml = html.replace(regex, replacement);
-    editorRef.current?.setContent(newHtml);
-    handleContentChange(newHtml);
+    const pages = parsePages(content);
+    const newPages = pages.map(p => p.replace(regex, replacement));
+    const serialized = serializePages(newPages);
+    editorRef.current?.setContent(serialized);
+    handleContentChange(serialized);
   }
 
   if (!doc) {

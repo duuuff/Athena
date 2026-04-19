@@ -320,6 +320,59 @@ src/
 
 ---
 
+## Améliorations implémentées (Session 6 — 2026-04-19)
+
+### Architecture : Pages indépendantes + Vue grille
+
+Refonte complète de `EditorCanvas.tsx` — passage d'un seul éditeur continu (avec marges CSS simulant des pages) à un modèle de **pages indépendantes** :
+
+#### Modèle de données
+- `content: string` = `JSON.stringify(string[])` — tableau de chaînes HTML, une par page
+- Rétrocompatible : si le contenu n'est pas un tableau JSON valide, il est traité comme page unique
+- `parsePages(raw)` / `serializePages(pages)` exportés depuis `EditorCanvas.tsx` et réutilisés dans `EditorPage.tsx`, `storage.ts`, `Dashboard.tsx`
+- `storage.ts` : `countWords` et `computeStats` via `flattenHtml()` qui supporte les deux formats
+
+#### Vue normale (pages empilées)
+- Un seul TipTap actif à la fois (page courante) — les autres pages sont des aperçus HTML statiques cliquables
+- Chaque page est un vrai `<div>` indépendant avec `overflow: hidden` — plus de contenu continu
+- Séparation visuelle : `PAGE_GAP = 48px`, fond `#dddcda` / `#111115`, ombre douce sur chaque feuille
+- Page active : bordure violette (`outline: 2px solid var(--accent2)`)
+- Clic sur une page non-active → switch d'éditeur (sauvegarde page courante → charge nouvelle page)
+- Numéro de page centré en bas : `— N / Total —`
+
+#### Auto-ajout de page
+- Quand le contenu de la page active dépasse `CONTENT_H` (963 px) ET le curseur est en fin de document ET c'est la dernière page → nouvelle page vide créée automatiquement + switch vers elle
+
+#### Bouton `+` pour ajouter une page
+- **Entre les pages** (vue normale) : cercle `+` dans l'espace de 48 px entre deux pages — visible au hover
+- **Fin de document** (vue normale) : cercle `+` toujours visible après la dernière page
+- Dans les deux cas : insère une page vide `<p></p>` à l'index voulu et switche vers elle
+
+#### Vue Grille (`⊞ Vue grille`)
+- Bouton fixe centré en bas de la vue normale
+- Miniatures à `GRID_SCALE = 0.22` (~175×247 px) avec CSS `transform: scale(0.22)` + `transformOrigin: top left`
+- Défilement vertical si beaucoup de pages (flex-wrap)
+- Page active : anneau violet + badge `EN COURS`
+- Clic sur miniature → retour vue normale sur cette page
+- Bouton `+` encerclé **entre chaque miniature** (visible au hover)
+- Bouton `+` en fin de grille (**toujours visible**) : rectangle pointillé « Nouvelle page »
+
+#### Template multi-pages (démo)
+- `DEMO_MULTIPAGE_CONTENT` dans `defaultContent.ts` : rapport de 4 pages avec tableaux, listes, titres
+- Disponible comme template « Rapport multi-pages » (icône 📑) dans le Dashboard
+- Démontre immédiatement la vue grille et la navigation entre pages
+
+#### Dashboard
+- `previewHtml(doc.content)` : extrait la première page pour l'aperçu miniature des cartes — évite d'afficher du JSON brut
+
+#### Compatibilité ascendante
+- Documents existants (contenu HTML simple) : chargés comme page unique, convertis en JSON au premier enregistrement
+- Versions sauvegardées (HTML simple) : restaurées correctement via `parsePages`
+- Find & Replace : opère sur toutes les pages (via `parsePages` + `serializePages` dans `handleReplace`)
+- Export Markdown / PDF : `editorRef.getHTML()` retourne toutes les pages jointes (avec `<div style="page-break-after:always;">` entre chacune)
+
+---
+
 ## Roadmap (non implémenté)
 
 - **Phase 4** : Backend (base de données, authentification, collaboration temps-réel)

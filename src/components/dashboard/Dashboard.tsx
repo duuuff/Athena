@@ -5,14 +5,23 @@ import { useRouter } from 'next/navigation';
 import { v4 as uuidv4 } from 'uuid';
 import { Document, TAG_PRESETS } from '@/lib/types';
 import { getDocuments, saveDocument, deleteDocument } from '@/lib/storage';
-import { DEFAULT_CONTENT, DEMO_THESIS_CONTENT, DEMO_REPORT_CONTENT, DEMO_ARTICLE_CONTENT, DEMO_CV_CONTENT } from '@/lib/defaultContent';
+import { DEFAULT_CONTENT, DEMO_THESIS_CONTENT, DEMO_REPORT_CONTENT, DEMO_ARTICLE_CONTENT, DEMO_CV_CONTENT, DEMO_MULTIPAGE_CONTENT } from '@/lib/defaultContent';
+
+function previewHtml(content: string): string {
+  try {
+    const pages = JSON.parse(content);
+    if (Array.isArray(pages) && pages.length > 0) return String(pages[0]);
+  } catch {}
+  return content;
+}
 
 const TEMPLATES = [
-  { id: 'blank',   icon: '📄', label: 'Document vierge',     description: 'Commencer de zéro',              content: DEFAULT_CONTENT },
-  { id: 'thesis',  icon: '🎓', label: 'Thèse / Mémoire',     description: 'Structure académique complète',   content: DEMO_THESIS_CONTENT },
-  { id: 'report',  icon: '📊', label: 'Rapport technique',    description: 'Format professionnel structuré',  content: DEMO_REPORT_CONTENT },
-  { id: 'article', icon: '📰', label: 'Article scientifique', description: 'Format IEEE / ACM',               content: DEMO_ARTICLE_CONTENT },
-  { id: 'cv',      icon: '👤', label: 'CV académique',        description: 'Curriculum vitae structuré',      content: DEMO_CV_CONTENT },
+  { id: 'blank',     icon: '📄', label: 'Document vierge',      description: 'Commencer de zéro',               content: DEFAULT_CONTENT },
+  { id: 'thesis',   icon: '🎓', label: 'Thèse / Mémoire',      description: 'Structure académique complète',    content: DEMO_THESIS_CONTENT },
+  { id: 'report',   icon: '📊', label: 'Rapport technique',     description: 'Format professionnel structuré',   content: DEMO_REPORT_CONTENT },
+  { id: 'article',  icon: '📰', label: 'Article scientifique',  description: 'Format IEEE / ACM',                content: DEMO_ARTICLE_CONTENT },
+  { id: 'cv',       icon: '👤', label: 'CV académique',         description: 'Curriculum vitae structuré',       content: DEMO_CV_CONTENT },
+  { id: 'multipage',icon: '📑', label: 'Rapport multi-pages',   description: 'Exemple 4 pages · vue grille',    content: DEMO_MULTIPAGE_CONTENT },
 ];
 
 type SortKey = 'newest' | 'oldest' | 'alpha' | 'words';
@@ -414,7 +423,7 @@ function DocCard({ doc, tagPopoverId, tagPopoverRef, onOpen, onDuplicate, onDele
 
       {/* Doc preview thumbnail */}
       <div style={{ background: 'var(--doc-bg)', borderRadius: '6px', height: '80px', marginBottom: '12px', overflow: 'hidden', padding: '10px 12px', border: '1px solid var(--doc-border)' }}>
-        <div style={{ fontSize: '8px', lineHeight: 1.6, color: '#333', fontFamily: "'Crimson Pro', serif", overflow: 'hidden', height: '100%', pointerEvents: 'none' }} dangerouslySetInnerHTML={{ __html: doc.content }} />
+        <div style={{ fontSize: '8px', lineHeight: 1.6, color: '#333', fontFamily: "'Crimson Pro', serif", overflow: 'hidden', height: '100%', pointerEvents: 'none' }} dangerouslySetInnerHTML={{ __html: previewHtml(doc.content) }} />
       </div>
 
       <div style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{doc.title}</div>
